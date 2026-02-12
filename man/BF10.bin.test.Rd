@@ -2,44 +2,71 @@
 % Please edit documentation in R/BF_users_functions.r
 \name{BF10.bin.test}
 \alias{BF10.bin.test}
-\title{Bayes factor for a Bayesian one-proportion test}
+\title{Bayes Factor for a Bayesian One-Proportion Test}
 \usage{
-BF10.bin.test(x, n, alpha, beta, location, scale, model, hypothesis, e = NULL)
+BF10.bin.test(
+  x,
+  n,
+  alpha,
+  beta,
+  h0,
+  scale,
+  prior_analysis,
+  alternative,
+  ROPE = NULL
+)
 }
 \arguments{
-\item{x}{Observed number of successes.}
+\item{x}{Numeric integer. Observed number of successes (non-negative integer scalar, must be \eqn{\le n}).}
 
-\item{n}{Sample size.}
+\item{n}{Numeric integer. Sample size (positive integer scalar).}
 
-\item{alpha}{Parameter for the analysis beta prior under the alternative hypothesis.}
+\item{alpha}{Numeric scalar.  Shape parameter of the analysis beta prior under the alternative hypothesis
+(required if \code{prior_analysis = "beta"}).}
 
-\item{beta}{Parameter for the analysis beta prior under the alternative hypothesis.}
+\item{beta}{Numeric scalar.  Shape parameter of the analysis beta prior under the alternative hypothesis
+(required if \code{prior_analysis = "beta"}).}
 
-\item{location}{Null proportion value.}
+\item{h0}{Numeric scalar.  Null proportion value (numeric scalar between 0.1 and 0.9).}
 
-\item{scale}{Scale parameter for the analysis prior (if applicable, e.g., for Moment prior).}
+\item{scale}{Numeric scalar.  Scale parameter for the analysis prior (only used if \code{prior_analysis = "Moment"}).}
 
-\item{model}{Statistical model of the analysis prior under the alternative hypothesis: beta prior (\code{"beta"}) or Moment prior (\code{"Moment"}).}
+\item{prior_analysis}{character. the analysis prior under the alternative hypothesis:
+\code{"beta"} (stretched beta) or \code{"Moment"} (normal-moment prior).}
 
-\item{hypothesis}{The hypothesis being tested: two-sided (\code{"!="}), right-sided (\code{">"}), or left-sided (\code{"<"}).}
+\item{alternative}{character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
+or left-sided (\code{"less"}).}
 
-\item{e}{Optional numeric vector specifying bounds for an interval null; used if interval BF is calculated.}
+\item{ROPE}{Numeric vector.  Optional numeric vector specifying bounds for an interval null; used if interval BF is calculated.}
 }
 \value{
-The Bayes factor (BF10) for the one-proportion test.
+An object of class \code{"BFvalue_bin"} containing:
+\itemize{
+\item \code{bf10}: Bayes factor in favor of the alternative hypothesis.
+\item \code{type}: Test type ("one-proportion").
+\item \code{x}: Number of successes.
+\item \code{n}: Sample size.
+\item \code{h0}: Null proportion value.
+\item \code{analysis_h1}: List describing the analysis prior, containing
+\code{prior} (prior distribution), \code{alpha} (alpha parameter),
+\code{beta} (beta parameter), and \code{scale} (scale parameter).
+\item \code{alternative}: the direction of the alternative hypothesis.
+\item \code{ROPE}: interval null bounds (if specified).
+\item \code{p.value}: p-value.
+}
 }
 \description{
-Calculate the Bayes factor (BF10) for a test of a single proportion, either against a point null or an interval null hypothesis.
+Calculate the Bayes factor (BF10) for a single-proportion test, either against a point null
+or an interval null hypothesis.
 }
 \examples{
 BF10.bin.test(
-  x = 12,
-  n = 50,
-  alpha = 2,
-  beta = 3,
-  location = 0.5,
-  scale = 1,
-  model = "beta",
-  hypothesis = "!="
-)
+ x = 42,
+ n = 52,
+ h0 = 0.5,
+ prior_analysis = "beta",
+ alternative = "greater",
+ alpha = 1,
+ beta = 1)
+
 }

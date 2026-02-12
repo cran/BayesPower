@@ -11,57 +11,58 @@ BF10.cor(
   alpha,
   beta,
   h0,
-  hypothesis,
-  location,
+  alternative,
   scale,
-  dff,
-  model,
-  e = NULL
+  prior_analysis,
+  ROPE = NULL
 )
 }
 \arguments{
-\item{r}{Observed correlation coefficient.}
+\item{r}{Numeric scalar. Observed correlation coefficient. Must be a numeric scalar between -1 and 1.}
 
-\item{n}{Sample size.}
+\item{n}{Numeric integer. Sample size. Must be a numeric scalar greater than 3.}
 
-\item{k}{Parameter for the analysis default beta prior under the alternative hypothesis.}
+\item{k}{Numeric scalar. Parameter for the analysis default beta prior (\code{"d_beta"}) under the alternative hypothesis.}
 
-\item{alpha}{Parameter for the analysis beta prior under the alternative hypothesis.}
+\item{alpha}{Numeric scalar. Parameter for the analysis beta prior (\code{"beta"}) under the alternative hypothesis.}
 
-\item{beta}{Parameter for the analysis beta prior under the alternative hypothesis.}
+\item{beta}{Numeric scalar. Parameter for the analysis beta prior (\code{"beta"}) under the alternative hypothesis.}
 
-\item{h0}{Null value of the correlation.}
+\item{h0}{Numeric scalar. Null value of the correlation. Must be a numeric scalar between -0.8 and 0.8.}
 
-\item{hypothesis}{The hypothesis being tested: two-sided (\code{"!="}), right-sided (\code{">"}), or left-sided (\code{"<"}).}
+\item{alternative}{Character. The direction of the alternative hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).}
 
-\item{location}{Location parameter for the analysis prior under the alternative hypothesis.}
+\item{scale}{Numeric scalar. Scale parameter for the analysis normal-moment prior (\code{"Moment"}). Must be > 0.}
 
-\item{scale}{Scale parameter for the analysis normal moment prior under the alternative hypothesis.}
+\item{prior_analysis}{Character. Analysis prior: default beta (\code{"d_beta"}), beta (\code{"beta"}), or normal-moment (\code{"Moment"}).}
 
-\item{dff}{Degrees of freedom for the analysis prior under the alternative hypothesis (if applicable).}
-
-\item{model}{Statistical model of the analysis prior under the alternative hypothesis: default beta (\code{"d_beta"}), beta (\code{"beta"}), or normal moment (\code{"NLP"}).}
-
-\item{e}{Optional numeric vector specifying bounds for an interval null; used if interval BF is calculated.}
+\item{ROPE}{Numeric vector. Optional numeric vector specifying bounds for an interval null hypothesis. For \code{"two.sided"}, must be two distinct finite values between -0.5 and 0.5. For \code{"greater"} or \code{"less"}, must satisfy additional bounds relative to \code{h0}.}
 }
 \value{
-The Bayes factor (BF10) for the correlation test.
+A list with class \code{"BFvalue_r"} containing:
+\itemize{
+\item \code{type}: "correlation"
+\item \code{bf10}: Calculated Bayes factor BF10
+\item \code{h0}: Null value of the correlation
+\item \code{r}: Observed correlation coefficient
+\item \code{n}: Sample size
+\item \code{analysis_h1}: List with the analysis prior parameters: \code{prior_analysis}, \code{k}, \code{alpha}, \code{beta}, and \code{scale}.
+\item \code{alternative}: the direction of the alternative hypothesis
+\item \code{ROPE}: Interval bounds if specified
+\item \code{p.value}: Numeric, p.value.
+}
 }
 \description{
-Calculate the Bayes factor (BF10) for a correlation, either against a point null or an interval null hypothesis.
+Calculate the Bayes factor (BF10) for a correlation coefficient, either against a point null
+or an interval null hypothesis. Supports default beta (\code{"d_beta"}), stretched beta (\code{"beta"}),
+and normal-moment (\code{"Moment"}) priors for the alternative hypothesis.
 }
 \examples{
 BF10.cor(
-  r = 0.3,
-  n = 50,
+  r = 0.3930924,
+  n = 46,
+  prior_analysis = "d_beta",
   k = 1,
-  alpha = 0.05,
-  beta = 0.2,
   h0 = 0,
-  hypothesis = "!=",
-  location = 0,
-  scale = 1,
-  dff = 49,
-  model = "d_beta"
-)
+  alternative = "two.sided")
 }

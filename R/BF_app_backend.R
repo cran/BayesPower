@@ -1,8 +1,23 @@
 #' @useDynLib BayesPower, .registration = TRUE
 #' @importFrom Rcpp evalCpp
 #' @importFrom rlang .data
+#' @importFrom utils globalVariables
 NULL
 
+# Avoid R CMD check notes
+utils::globalVariables(c(
+  "SampleSize", "Probability", "Type",
+  "True Positive", "False Positive",
+  "True Negative", "False Negative",
+  "x", "BF","r","f"
+))
+
+fmt_val <- function(x) {
+  if (is.numeric(x) && length(x) == 1) return(as.character(x))
+  if (is.numeric(x) && length(x) > 1) return(paste(x, collapse = ", "))
+  if (is.character(x)) return(shQuote(x))
+  return(as.character(x))
+}
 # ---- ANOVA.r ----
 
 # k = number of predictor in the full model
@@ -265,7 +280,7 @@ prior_plot_f <-function(q,dff,rscale,f_m,model,dff_d,rscale_d,f_m_d,model_d,de_a
   oldpar <- graphics::par(no.readonly = TRUE)
   base::on.exit(graphics::par(oldpar))
   graphics::par(mfrow = c(1, 1))
-  fsq = seq(0.001,15,.2)
+  fsq = seq(0.01,3,.025)
 
   prior.analysis = F_prior(fsq,q,dff,rscale,f_m,model)
   prior.design   <- if (de_an_prior == 0 && model_d != "Point")
@@ -298,120 +313,223 @@ prior_plot_f <-function(q,dff,rscale,f_m,model,dff_d,rscale_d,f_m_d,model_d,de_a
 
 }
 
-bf10_f <-function(D,n,k,p,dff,rscale,f_m,model){
-  q       <- k-p
-  m       <- n-p
-  ff      <- seq(from = .01,to = 10,.05)
-  f.BF10  <- F_BF_bound_10(D,q,m,dff,rscale,f_m,model)
-  BF10    <- F_BF(ff,q,m,dff,rscale,f_m,model)
+bf10_f <- function(D, n, k, p, dff, rscale, f_m, model) {
 
+  q <- k - p
+  m <- n - p
+  ff <- seq(0.01, 10, 0.05)
 
-  if (length(f.BF10) == 1){
-    main =  bquote(bold("BF"[10]~"="~.(D) ~"when f = "~.(format(round(f.BF10,digits = 2)))))
+  # BF10 values and bounds
+  BF10 <- F_BF(ff, q, m, dff, rscale, f_m, model)
+  f.BF10 <- F_BF_bound_10(D, q, m, dff, rscale, f_m, model)
+
+  df10 <- data.frame(f = ff, BF = BF10)
+
+  main.bf10 <- if (length(f.BF10) == 1) {
+    bquote(bold("BF"[10]~"="~.(D)~" when f = "~.(round(f.BF10, 2))))
   } else {
-    main =  bquote(bold("BF"[10]~"="~.(D) ~"when f = "~.(format(round(f.BF10[1],digits = 2)))~"or"~.(format(round(f.BF10[2],digits = 2)))))
+    bquote(bold("BF"[10]~"="~.(D)~" when f = "~.(round(f.BF10[1], 2))~" or "~.(round(f.BF10[2], 2))))
   }
 
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
+  # x-axis breaks for BF10
+  x_breaks_10 <- sort(unique(c(0, 10, round(f.BF10, 2))))
 
-  graphics::par(mfrow = c(1, 2))
-  plot(ff,BF10,log = "y",xlim=c(0,10),xlab= "f-value",type="l", ylab = expression(BF[10] * " (log scale)"),main =   main,frame.plot = FALSE,xaxt = "n")
-  graphics::abline(v = f.BF10)
-  graphics::axis(1, c(0,10))
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(f, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = f.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, 10), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "f-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
 
-  if (length(f.BF10) != 0 ){
-    graphics::axis(1, round(f.BF10,2))}
+  # BF01 values and bounds
+  BF01 <- 1 / BF10
+  f.BF01 <- F_BF_bound_01(D, q, m, dff, rscale, f_m, model)
+  max_BF01 <- 1 / F_BF(0.001, q, m, dff, rscale, f_m, model)
+  impossible <- any(max_BF01 < D | f.BF01 == "bound cannot be found")
 
-  max_BF = 1/  F_BF(.001,q,m,dff,rscale,f_m,model)
-  f.BF01 =  F_BF_bound_01(D,q,m,dff,rscale,f_m,model)
+  df01 <- data.frame(f = ff, BF = BF01)
 
-
-
-  plot(ff,1/BF10,log = "y",xlab= "f-value",type="l",main = "",frame.plot = FALSE,ylab = bquote("BF"[0][1]* " (log scale)"),xaxt = "n")
-  graphics::axis(1, c(0,10))
-  if (any(max_BF<D |f.BF01 == "bound cannot be found" ) ) {
-    main = bquote(bold("It is impossible to have BF"[0][1]~"="~.(D)))
-    graphics::title(main = main)
-    #sprintf("It is impossible to have BF01 = %.3f ",D)
-  } else      {
-    graphics::abline(v = f.BF01)
-    graphics::axis(1, round(f.BF01,2))
-    if (length(f.BF01) == 1){
-      main =  bquote(bold("BF"[0][1]~"="~.(D) ~"when f = "~.(format(round(f.BF01,digits = 2)))))
-      graphics::title(main = main)
+  if (impossible) {
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(f, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(0, 10), breaks = c(0, 10)) +
+      ggplot2::labs(
+        x = "f-value",
+        y = expression("BF"[0][1] * " (log scale)"),
+        title = bquote(bold("It is impossible to have BF"[0][1]~"="~.(D)))
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 14, face = "bold"),
+        axis.text = ggplot2::element_text(size = 12),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
+  } else {
+    main.bf01 <- if (length(f.BF01) == 1) {
+      bquote(bold("BF"[0][1]~"="~.(D)~" when f = "~.(round(f.BF01, 2))))
     } else {
-      main =  bquote(bold("BF"[0][1]~"="~.(D) ~"when f = "~.(format(round(f.BF01[1],digits = 2)))~"or"~.(format(round(f.BF01[2],digits = 2)))))
-      graphics::title(main = main)
-    }}
-
-}
-Power_f<-function(D,k,p,dff,rscale,f_m,model,k_d,p_d,dff_d,rscale_d,f_m_d,model_d,de_an_prior,N){
-  smin = (2*k-p+1)
-  smax = N*1.2
-  n = seq(smin,smax , by = (smax-smin)/30)
-  q = k-p
-  m = n-p
-  TPE =  array(NA, dim = c(length(n)))
-  FPE =  array(NA, dim = c(length(n)))
-  TNE =  array(NA, dim = c(length(n)))
-  FNE =  array(NA, dim = c(length(n)))
-
-  for ( i in 1:length(n)){
-    f10 = F_BF_bound_10(D,q,m[i],dff,rscale,f_m,model)
-    f01 = F_BF_bound_01(D,q,m[i],dff,rscale,f_m,model)
-
-
-    if(de_an_prior == 1){
-      TPE[i] = F_TPE(f10,q,m[i],dff,rscale,f_m,model)
-    }else{
-      TPE[i] = F_TPE(f10,q,m[i],dff_d,rscale_d,f_m_d,model_d)
+      bquote(bold("BF"[0][1]~"="~.(D)~" when f = "~.(round(f.BF01[1], 2))~" or "~.(round(f.BF01[2], 2))))
     }
 
-    FPE[i] = F_FPE(f10,q,m[i])
-    TNE[i] = F_TNE(f01,q,m[i])
-    if(de_an_prior == 1){
-      FNE[i] = F_FNE(f01,q,m[i],dff,rscale,f_m,model)
-    }else{
-      FNE[i] = F_FNE(f01,q,m[i],dff_d,rscale_d,f_m_d,model_d)
-    }
+    x_breaks_01 <- sort(unique(c(0, 10, round(f.BF01, 2))))
 
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(f, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::geom_vline(xintercept = f.BF01, linetype = "dashed") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(0, 10), breaks = x_breaks_01) +
+      ggplot2::labs(
+        x = "f-value",
+        y = expression("BF"[0][1] * " (log scale)"),
+        title = main.bf01
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 14, face = "bold"),
+        axis.text = ggplot2::element_text(size = 12),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(n, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(n,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-  plot(n, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(n,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  # Combine plots side by side
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
+}
 
+Power_f <- function(D, k, p, dff, rscale, f_m, model,
+                    k_d, p_d, dff_d, rscale_d, f_m_d, model_d,
+                    de_an_prior, N) {
+
+  # Sample size range
+  smin <- (2 * k - p + 1)
+  smax <- N * 1.2
+  n <- seq(smin, smax, length.out = 31)
+  q <- k - p
+  m <- n - p
+
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(n))
+
+  for (i in seq_along(n)) {
+    f10 <- F_BF_bound_10(D, q, m[i], dff, rscale, f_m, model)
+    f01 <- F_BF_bound_01(D, q, m[i], dff, rscale, f_m, model)
+
+    # True Positive
+    TPE[i] <- if (de_an_prior == 1) {
+      F_TPE(f10, q, m[i], dff, rscale, f_m, model)
+    } else {
+      F_TPE(f10, q, m[i], dff_d, rscale_d, f_m_d, model_d)
+    }
+
+    # False Positive / True Negative
+    FPE[i] <- F_FPE(f10, q, m[i])
+    TNE[i] <- F_TNE(f01, q, m[i])
+
+    # False Negative
+    FNE[i] <- if (de_an_prior == 1) {
+      F_FNE(f01, q, m[i], dff, rscale, f_m, model)
+    } else {
+      F_FNE(f01, q, m[i], dff_d, rscale_d, f_m_d, model_d)
+    }
+  }
+
+  # Prepare data for ggplot
+  df_bf10 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = n,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf10$Type <- factor(df_bf10$Type, levels = c("True Positive", "False Positive"))
+
+  df_bf01 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = n,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf01$Type <- factor(df_bf01$Type, levels = c("True Negative", "False Negative"))
+
+  # Colors for lines
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # Legend theme
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # BF10 plot
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # BF01 plot
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Combine plots side by side
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
 # ---- ANOVAe.r ----
@@ -680,7 +798,7 @@ prior_plot_fe <-function(q,dff,rscale,f,model,dff_d,rscale_d,f_m_d,model_d,de_an
 
   normalization  <- stats::integrate(function(fsq)F_prior(fsq,q,dff,rscale,f,model),lower = e,upper = Inf,rel.tol = 1e-10)$value
 
-  fsq = seq(0.001,20,.05)
+  fsq = seq(0.01,3,.025)
   #prior.analysis.h1 = F_prior(fsq,q,dff,rscale,f,model)/normalization
   prior.analysis.h1 = F_prior(fsq,q,dff,rscale,f,model)
   prior.analysis.h1[fsq<e]=0
@@ -734,127 +852,225 @@ prior_plot_fe <-function(q,dff,rscale,f,model,dff_d,rscale_d,f_m_d,model_d,de_an
 
 }
 
-bf10_fe <-function(D,n,k,p,dff,rscale,f_m,model,e){
-  q       <- k-p
-  m       <- n-p
-  ff      <- seq(from = .01,to = 10,.05)
-  f.BF10  <- Fe_BF_bound_10(D,q,m,dff,rscale,f_m,model,e)
-  BF10    <- Fe_BF(ff,q,m,dff,rscale,f_m,model,e)
+bf10_fe <- function(D, n, k, p, dff, rscale, f_m, model, e) {
 
-  if (length(f.BF10) == 1){
-    main =  bquote(bold("BF"[10]~"="~.(D) ~"when f = "~.(format(round(f.BF10,digits = 2)))))
+  q <- k - p
+  m <- n - p
+  ff <- seq(0.01, 10, 0.05)
+
+  # BF10 values and bounds
+  BF10 <- Fe_BF(ff, q, m, dff, rscale, f_m, model, e)
+  f.BF10 <- Fe_BF_bound_10(D, q, m, dff, rscale, f_m, model, e)
+
+  df10 <- data.frame(f = ff, BF = BF10)
+
+  main.bf10 <- if (length(f.BF10) == 1) {
+    bquote(bold("BF"[10]~"="~.(D)~" when f = "~.(round(f.BF10, 2))))
   } else {
-    main =  bquote(bold("BF"[10]~"="~.(D) ~"when f = "~.(format(round(f.BF10[1],digits = 2)))~"or"~.(format(round(f.BF10[2],digits = 2)))))
+    bquote(bold("BF"[10]~"="~.(D)~" when f = "~.(round(f.BF10[1], 2))~" or "~.(round(f.BF10[2], 2))))
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(ff,BF10,log = "y",xlim=c(0,10),xlab= "f-value",type="l", ylab = expression("BF"[10]* " (log scale)"),main =   main,frame.plot = FALSE,xaxt = "n")
-  graphics::abline(v = f.BF10)
-  graphics::axis(1, c(0,10))
 
-  if (length(f.BF10) != 0 ){
-    graphics::axis(1, round(f.BF10,2))}
+  # x-axis breaks for BF10
+  x_breaks_10 <- sort(unique(c(0, 10, round(f.BF10, 2))))
 
-  max_BF <- 1/  Fe_BF(.001,q,m,dff,rscale,f_m,model,e)
-  f.BF01   <-  Fe_BF_bound_01(D,q,m,dff,rscale,f_m,model,e)
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(f, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = f.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, 10), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "f-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
 
+  # BF01 values and bounds
+  BF01 <- 1 / BF10
+  f.BF01 <- Fe_BF_bound_01(D, q, m, dff, rscale, f_m, model, e)
+  max_BF01 <- 1 / Fe_BF(0.001, q, m, dff, rscale, f_m, model, e)
+  impossible <- any(max_BF01 < D | f.BF01 == "bound cannot be found")
 
+  df01 <- data.frame(f = ff, BF = BF01)
 
-  plot(ff,1/BF10,log = "y",xlab= "f-value",type="l",main = "",frame.plot = FALSE,ylab = bquote("BF"[0][1]* " (log scale)"),xaxt = "n")
-  graphics::axis(1, c(0,10))
-
-  if (any(max_BF<D |f.BF01 == "bound cannot be found" ) ) {
-    main = bquote(bold("It is impossible to have BF"[0][1]~"="~.(D)))
-    graphics::title(main = main)
-    #sprintf("It is impossible to have BF01 = %.3f ",D)
-  } else      {
-    graphics::abline(v = f.BF01)
-    graphics::axis(1, round(f.BF01,2))
-    if (length(f.BF01) == 1){
-      main =  bquote(bold("BF"[0][1]~"="~.(D) ~"when f = "~.(format(round(f.BF01,digits = 2)))))
-      graphics::title(main = main)
+  if (impossible) {
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(f, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(0, 10), breaks = c(0, 10)) +
+      ggplot2::labs(
+        x = "f-value",
+        y = expression("BF"[0][1] * " (log scale)"),
+        title = bquote(bold("It is impossible to have BF"[0][1]~"="~.(D)))
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 14, face = "bold"),
+        axis.text = ggplot2::element_text(size = 12),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
+  } else {
+    main.bf01 <- if (length(f.BF01) == 1) {
+      bquote(bold("BF"[0][1]~"="~.(D)~" when f = "~.(round(f.BF01, 2))))
     } else {
-      main =  bquote(bold("BF"[0][1]~"="~.(D) ~"when f = "~.(format(round(f.BF01[1],digits = 2)))~"or"~.(format(round(f.BF01[2],digits = 2)))))
-      graphics::title(main = main)
-    }}
-
-}
-
-Power_fe<-function(D,k,p,dff,rscale,f_m,model,k_d,p_d,dff_d,rscale_d,f_m_d,model_d,de_an_prior,N,e){
-
-  smin = (2*k-p+1)
-  smax = N*2
-  sdf = seq(smin,smax , by = (smax-smin)/30)
-
-  q = k-p
-  m = sdf-p
-  TPE =  array(NA, dim = c(length(sdf)))
-  FPE =  array(NA, dim = c(length(sdf)))
-  TNE =  array(NA, dim = c(length(sdf)))
-  FNE =  array(NA, dim = c(length(sdf)))
-  for ( i in 1:length(sdf)){
-    f10 = Fe_BF_bound_10(D,q,m[i],dff,rscale,f_m,model,e)
-    f01 = Fe_BF_bound_10(D,q,m[i],dff,rscale,f_m,model,e)
-
-
-    if(de_an_prior == 1){
-      TPE[i] = Fe_TPE(f10,q,m[i],dff,rscale,f_m,model,e)
-
-    }else{
-      TPE[i] = Fe_TPE(f10,q,m[i],dff_d,rscale_d,f_m_d,model_d,e)
+      bquote(bold("BF"[0][1]~"="~.(D)~" when f = "~.(round(f.BF01[1], 2))~" or "~.(round(f.BF01[2], 2))))
     }
 
-    if(de_an_prior == 1){
-      FNE[i] = Fe_FNE(f01,q,m[i],dff,rscale,f_m,model,e)
+    x_breaks_01 <- sort(unique(c(0, 10, round(f.BF01, 2))))
 
-    }else{
-      FNE[i] = Fe_FNE(f01,q,m[i],dff_d,rscale_d,f_m_d,model_d,e)
-    }
-
-    FPE[i]       <- Fe_FPE(f10,q,m[i],dff,rscale,f_m,model,e)
-    TNE[i]       <- Fe_TNE(f01,q,m[i],dff,rscale,f_m,model,e)
-
-
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(f, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::geom_vline(xintercept = f.BF01, linetype = "dashed") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(0, 10), breaks = x_breaks_01) +
+      ggplot2::labs(
+        x = "f-value",
+        y = expression("BF"[0][1] * " (log scale)"),
+        title = main.bf01
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 14, face = "bold"),
+        axis.text = ggplot2::element_text(size = 12),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(sdf, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(sdf,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-
-  plot(sdf, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(sdf,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
-
+  # Combine plots side by side
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
+
+Power_fe <- function(D, k, p, dff, rscale, f_m, model,
+                     k_d, p_d, dff_d, rscale_d, f_m_d, model_d,
+                     de_an_prior, N, e) {
+
+  # Sample size range
+  smin <- (2 * k - p + 1)
+  smax <- N * 2
+  sdf <- seq(smin, smax, length.out = 31)
+  q <- k - p
+  m <- sdf - p
+
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(sdf))
+
+  for (i in seq_along(sdf)) {
+    f10 <- Fe_BF_bound_10(D, q, m[i], dff, rscale, f_m, model, e)
+    f01 <- Fe_BF_bound_01(D, q, m[i], dff, rscale, f_m, model, e)
+
+    # True Positive
+    TPE[i] <- if (de_an_prior == 1) {
+      Fe_TPE(f10, q, m[i], dff, rscale, f_m, model, e)
+    } else {
+      Fe_TPE(f10, q, m[i], dff_d, rscale_d, f_m_d, model_d, e)
+    }
+
+    # False Negative
+    FNE[i] <- if (de_an_prior == 1) {
+      Fe_FNE(f01, q, m[i], dff, rscale, f_m, model, e)
+    } else {
+      Fe_FNE(f01, q, m[i], dff_d, rscale_d, f_m_d, model_d, e)
+    }
+
+    # False Positive / True Negative
+    FPE[i] <- Fe_FPE(f10, q, m[i], dff, rscale, f_m, model, e)
+    TNE[i] <- Fe_TNE(f01, q, m[i], dff, rscale, f_m, model, e)
+  }
+
+  # Prepare data for ggplot
+  df_bf10 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf10$Type <- factor(df_bf10$Type, levels = c("True Positive", "False Positive"))
+
+  df_bf01 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf01$Type <- factor(df_bf01$Type, levels = c("True Negative", "False Negative"))
+
+  # Colors for lines
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # Legend theme
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # BF10 plot
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # BF01 plot
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Combine plots side by side
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
+}
 
 # ---- binomial.r ----
 adjust_root_10 <- function(root, n, alpha, beta, location, scale, model, hypothesis, D) {
@@ -904,7 +1120,7 @@ bin_prior <-function(prop,alpha,beta,location,scale,model){
 
   switch(model,
          "beta" = stats::dbeta(prop, alpha,beta),
-         "Moment" = dnlp(prop,location,scale))
+         "Moment" = dMoment(prop,location,scale))
 }
 bin_BF<-function(x,n,alpha,beta,location,scale,model,hypothesis){
   BF = NA
@@ -1372,130 +1588,207 @@ bin_table<-function(D,target,h0,alpha,beta,location,scale,model,hypothesis,
   table
 }
 
-bin_bf10 <-function(D,n,alpha,beta,location,scale,model,hypothesis){
-  x= seq(from = 0,to =n,by= 3)
+bin_bf10<- function(D, n, alpha, beta, location, scale, model, hypothesis) {
 
-  # Compute BF10 and x-bounds:
-  b.BF10 <- round(bin_BF_bound_10(D,n,alpha,beta,location,scale,model,hypothesis),2)
-  BF10_at_b <- round(bin_BF(b.BF10,n,alpha,beta,location,scale,model,hypothesis),2)
-  BF10 <- bin_BF(x,n,alpha,beta,location,scale,model,hypothesis)
+  # Sequence of successes
+  x <- seq(0, n, by = 3)
 
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
+  # Compute BF10 and bounds
+  BF10 <- bin_BF(x, n, alpha, beta, location, scale, model, hypothesis)
+  b.BF10 <- bin_BF_bound_10(D, n, alpha, beta, location, scale, model, hypothesis)
+  BF10_at_b <- bin_BF(b.BF10, n, alpha, beta, location, scale, model, hypothesis)
 
-  if (length(b.BF10)== 2){  part1 = bquote(bold("BF"[10] ~ "=" ~ .(BF10_at_b[1]) / .(BF10_at_b[2])))}else{part1 = bquote(bold("BF"[10] ~ "=" ~ .(BF10_at_b[1])))}
+  BF01 <- 1 / BF10
+  b.BF01 <- bin_BF_bound_01(D, n, alpha, beta, location, scale, model, hypothesis)
+  BF01_at_b <- 1 / bin_BF(b.BF01, n, alpha, beta, location, scale, model, hypothesis)
 
-  if (length(b.BF10)== 2){  part2 = bquote("when x = " ~ .(b.BF10[1]) / .(b.BF10[2]))}else{  part2 <- bquote("when x = " ~ .(b.BF10[1]))}
-
-  main <- bquote(bold(.(part1) ~ .(part2)))
-
-  plot(x, BF10, type = "l", log = "y", xlab = "Number of success", ylab = expression("BF"[10]* " (log scale)"),
-       main = main, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = b.BF10)
-  graphics::axis(1, c(0, n))
-  if (length(b.BF10)) graphics::axis(1, round(b.BF10, 2))
-
-
-  # right plot - BF01:
-  BF01   <- 1 / BF10
-  b.BF01 <- round(bin_BF_bound_01(D,n,alpha,beta,location,scale,model,hypothesis),2)
-  BF01_at_b <- round(1/bin_BF(b.BF01,n,alpha,beta,location,scale,model,hypothesis),2)
-
-  # Check if BF01 = D is possible:
-  max.BF01 <- 1 / bin_BF(round(location*n),n,alpha,beta,location,scale,model,hypothesis)
+  # Check if BF01 = D is impossible
+  max.BF01 <- 1 / bin_BF(round(location * n), n, alpha, beta, location, scale, model, hypothesis)
   impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(b.BF01, "bound cannot be found"))
-
-  plot(x, BF01, type = "l", log = "y", xlab = "Number of success", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(0, n))
-
-  if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+  # Titles for BF10
+  main.bf10 <- if (length(b.BF10) == 1) {
+    bquote(bold("BF"[10] ~ "=" ~ .(round(BF10_at_b, 2)) ~ " when x = " ~ .(round(b.BF10, 2))))
   } else {
-    graphics::abline(v = b.BF01)
-    graphics::axis(1, round(b.BF01, 2))
-
-    if (length(b.BF10) == 2) {
-      part1 <- bquote("BF"[0][1] == bold(.(BF01_at_b[1])) / bold(.(BF01_at_b[2])))
-      part2 <- bquote(bold("when x = " ~ bold(.(b.BF01[1])) / bold(.(b.BF01[2]))))
-    } else {
-      part1 <- bquote("BF"[01] == bold(.(BF01_at_b[1])))
-      part2 <- bquote(bold("when x = " ~ bold(.(b.BF01[1]))))
-    }
-
-    main.bf01 = bquote(bold(.(part1) ~ .(part2)))
-    graphics::title(main = main.bf01)
+    bquote(bold("BF"[10] ~ "=" ~ .(round(BF10_at_b[1], 2)) ~ "/" ~ .(round(BF10_at_b[2], 2)) ~
+                  " when x = " ~ .(round(b.BF10[1], 2)) ~ " or " ~ .(round(b.BF10[2], 2))))
   }
+
+  # Titles for BF01
+  main.bf01 <- if (impossible) {
+    bquote(bold("It is impossible to have BF"[01] ~ "=" ~ .(D)))
+  } else if (length(b.BF01) == 1) {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(round(BF01_at_b, 2)) ~ " when x = " ~ .(round(b.BF01, 2))))
+  } else {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(round(BF01_at_b[1], 2)) ~ "/" ~ .(round(BF01_at_b[2], 2)) ~
+                  " when x = " ~ .(round(b.BF01[1], 2)) ~ " or " ~ .(round(b.BF01[2], 2))))
+  }
+
+
+  # Data frames for ggplot
+  df_bf10 <- data.frame(x = x, BF = BF10)
+  df_bf01 <- data.frame(x = x, BF = BF01)
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF10 ----------
+  x_breaks_10 <- sort(unique(c(0, n, round(b.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(x = x, y = BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = b.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, n), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "Number of successes",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    clean_theme
+
+  ## ---------- BF01 ----------
+  x_breaks_01 <- if (impossible) c(0, n)
+  else sort(unique(c(0, n, round(b.BF01, 2))))
+
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(x = x, y = BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(
+      xintercept = if (!impossible) b.BF01 else NA,
+      linetype = "dashed"
+    ) +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, n), breaks = x_breaks_01) +
+    ggplot2::labs(
+      x = "Number of successes",
+      y = expression("BF"[0][1] * " (log scale)"),
+      title = main.bf01
+    ) +
+    clean_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
-Power_bin<-function(D,h0,alpha,beta,location,scale,model,hypothesis,
-                    alpha_d,beta_d,location_d,scale_d,model_d, de_an_prior,N){
+Power_bin <- function(D, h0, alpha, beta, location, scale, model, hypothesis,
+                         alpha_d, beta_d, location_d, scale_d, model_d,
+                         de_an_prior, N) {
 
-  smin = 10
-  smax = N*1.2
-  Ns = ceiling(seq(smin,smax , by = (smax-smin)/30))
+  # Sample size range
+  Ns <- ceiling(seq(10, N*1.2, length.out = 31))
 
-  TPE =  array(NA, dim = c(length(Ns)))
-  FPE =  array(NA, dim = c(length(Ns)))
-  TNE =  array(NA, dim = c(length(Ns)))
-  FNE =  array(NA, dim = c(length(Ns)))
+  # Initialize probability vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(Ns))
 
+  # Compute bounds and probabilities
+  for (i in seq_along(Ns)) {
+    x10 <- bin_BF_bound_10(D, Ns[i], alpha, beta, location, scale, model, hypothesis)
+    x01 <- bin_BF_bound_01(D, Ns[i], alpha, beta, location, scale, model, hypothesis)
 
-  for ( i in 1:length(Ns)){
-    x10 = bin_BF_bound_10(D,Ns[i],alpha,beta,location,scale,model,hypothesis)
-    x01 = bin_BF_bound_01(D,Ns[i],alpha,beta,location,scale,model,hypothesis)
-
-    if(de_an_prior ==1){
-      TPE[i] = bin_TPE(x10,Ns[i],h0,alpha,beta,location,scale,model,hypothesis)
-    }else{
-      TPE[i] =bin_TPE(x10,Ns[i],h0,alpha_d,beta_d,location_d,scale_d,model_d,hypothesis)
+    TPE[i] <- if (de_an_prior == 1) {
+      bin_TPE(x10, Ns[i], h0, alpha, beta, location, scale, model, hypothesis)
+    } else {
+      bin_TPE(x10, Ns[i], h0, alpha_d, beta_d, location_d, scale_d, model_d, hypothesis)
     }
-    if(de_an_prior ==1){
-      FNE[i] = bin_FNE(x01,Ns[i],h0,alpha,beta,location,scale,model,hypothesis)
-    }else{
-      FNE[i] =bin_FNE(x01,Ns[i],h0,alpha_d,beta_d,location_d,scale_d,model_d,hypothesis)
-    }
-    FPE[i] = bin_FPE(x10,Ns[i],location,hypothesis)
-    TNE[i] = bin_TNE(x01,Ns[i],location,hypothesis)
 
+    FNE[i] <- if (de_an_prior == 1) {
+      bin_FNE(x01, Ns[i], h0, alpha, beta, location, scale, model, hypothesis)
+    } else {
+      bin_FNE(x01, Ns[i], h0, alpha_d, beta_d, location_d, scale_d, model_d, hypothesis)
+    }
+
+    FPE[i] <- bin_FPE(x10, Ns[i], location, hypothesis)
+    TNE[i] <- bin_TNE(x01, Ns[i], location, hypothesis)
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(Ns, TPE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(Ns,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-  plot(Ns, TNE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(Ns,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  # Prepare data for ggplot
+  df_BF10 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Ns,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_BF10$Type <- factor(df_BF10$Type, levels = c("True Positive", "False Positive"))
 
+  df_BF01 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Ns,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_BF01$Type <- factor(df_BF01$Type, levels = c("True Negative", "False Negative"))
 
+  # Colors for lines
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # ---------- Theme for axes, text, and grid ----------
+  axis_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),      # remove background grid
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # ---------- Theme for legend ----------
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),           # inside top-left corner
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # ---------- BF10 Plot ----------
+  p1 <- ggplot2::ggplot(df_BF10, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    axis_theme +
+    legend_theme
+
+  # ---------- BF01 Plot ----------
+  p2 <- ggplot2::ggplot(df_BF01, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    axis_theme +
+    legend_theme
+
+  # Combine side-by-side
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
 
@@ -1546,9 +1839,9 @@ bin_prior_plot <-function(h0,alpha,beta,location,scale,model,alpha_d,beta_d,loca
   ylim.max <- max(finite_vals)
   # Base plot:
   plot(prop, prior.analysis, type = "l", lwd = 2,
-       xlab = bquote(atop(italic("p"), "")),
+       xlab = bquote(atop(italic(theta))),
        ylab = "density",
-       main = bquote(bold("Prior distribution on "~italic(p)~"under the alternative hypothesis")),
+       main = bquote(bold("Prior distribution on "~italic(theta)~"under the alternative hypothesis")),
        frame.plot = FALSE,
        ylim = c(0, ylim.max))
 
@@ -2161,130 +2454,213 @@ bin_e_table<-function(D,target,h0,alpha,beta,location,scale,model,hypothesis,
   table
 }
 
-bin_e_bf10 <-function(D,n,alpha,beta,location,scale,model,hypothesis,e){
-  x= seq(from = 0,to =n,by= 3)
+bin_e_bf10 <- function(D, n, alpha, beta, location, scale, model, hypothesis, e) {
 
-  # Compute BF10 and x-bounds:
-  b.BF10     <- round(bin_e_BF_bound_10(D,n,alpha,beta,location,scale,model,hypothesis,e),2)
-  BF10_at_b  <- round(bin_e_BF(b.BF10,n,alpha,beta,location,scale,model,hypothesis,e),2)
-  BF10       <- bin_e_BF(x,n,alpha,beta,location,scale,model,hypothesis,e)
+  # Sequence of successes
+  x <- seq(0, n, by = 3)
 
-  if (length(b.BF10)== 2){  part1 = bquote(bold("BF"[10] ~ "=" ~ .(BF10_at_b[1]) / .(BF10_at_b[2])))}else{part1 = bquote(bold("BF"[10] ~ "=" ~ .(BF10_at_b[1])))}
+  # Compute BF10 and bounds
+  BF10 <- bin_e_BF(x, n, alpha, beta, location, scale, model, hypothesis, e)
+  b.BF10 <- bin_e_BF_bound_10(D, n, alpha, beta, location, scale, model, hypothesis, e)
+  BF10_at_b <- bin_e_BF(b.BF10, n, alpha, beta, location, scale, model, hypothesis, e)
 
-  if (length(b.BF10)== 2){  part2 = bquote("when x = " ~ .(b.BF10[1]) / .(b.BF10[2]))}else{  part2 <- bquote("when x = " ~ .(b.BF10[1]))}
+  # Compute BF01 and bounds
+  BF01 <- 1 / BF10
+  b.BF01 <- bin_e_BF_bound_01(D, n, alpha, beta, location, scale, model, hypothesis, e)
+  BF01_at_b <- 1 / bin_e_BF(b.BF01, n, alpha, beta, location, scale, model, hypothesis, e)
 
-  main <- bquote(bold(.(part1) ~ .(part2)))
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(x, BF10, type = "l", log = "y", xlab = "Number of success", ylab = expression("BF"[10]* " (log scale)"),
-       main = main, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = b.BF10)
-  graphics::axis(1, c(0, n))
-  if (length(b.BF10)) graphics::axis(1, round(b.BF10, 2))
-
-  # right plot - BF01:
-  BF01   <- 1 / BF10
-  b.BF01 <- round(bin_e_BF_bound_01(D,n,alpha,beta,location,scale,model,hypothesis,e),2)
-  BF01_at_b <- round(1/bin_e_BF(b.BF01,n,alpha,beta,location,scale,model,hypothesis,e),2)
-
-  # Check if BF01 = D is possible:
-  max.BF01 <- 1 / bin_e_BF(round(n/2),n,alpha,beta,location,scale,model,hypothesis,e)
+  # Check if BF01 = D is impossible
+  max.BF01 <- 1 / bin_e_BF(round(n / 2), n, alpha, beta, location, scale, model, hypothesis, e)
   impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(b.BF01, "bound cannot be found"))
 
-  plot(x, BF01, type = "l", log = "y", xlab = "Number of success", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(0, n))
-
-  if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+  # Titles for BF10
+  main.bf10 <- if (length(b.BF10) == 1) {
+    bquote(bold("BF"[10] ~ "=" ~ .(round(BF10_at_b, 2)) ~ " when x = " ~ .(round(b.BF10, 2))))
   } else {
-    graphics::abline(v = b.BF01)
-    graphics::axis(1, round(b.BF01, 2))
-
-    if (length(b.BF10) == 2) {
-      part1 <- bquote("BF"[0][1] == bold(.(BF01_at_b[1])) / bold(.(BF01_at_b[2])))
-      part2 <- bquote(bold("when x = " ~ bold(.(b.BF01[1])) / bold(.(b.BF01[2]))))
-    } else {
-      part1 <- bquote("BF"[0][1] == bold(.(BF01_at_b[1])))
-      part2 <- bquote(bold("when x = " ~ bold(.(b.BF01[1]))))
-    }
-    main.bf01 = bquote(bold(.(part1) ~ .(part2)))
-    graphics::title(main = main.bf01)
+    bquote(bold("BF"[10] ~ "=" ~ .(round(BF10_at_b[1], 2)) ~ "/" ~ .(round(BF10_at_b[2], 2)) ~
+                  " when x = " ~ .(round(b.BF10[1], 2)) ~ " or " ~ .(round(b.BF10[2], 2))))
   }
 
+  # Titles for BF01
+  main.bf01 <- if (impossible) {
+    bquote(bold("It is impossible to have BF"[01] ~ "=" ~ .(D)))
+  } else if (length(b.BF01) == 1) {
+    bquote(bold("BF"[01] ~ "=" ~ .(round(BF01_at_b, 2)) ~ " when x = " ~ .(round(b.BF01, 2))))
+  } else {
+    bquote(bold("BF"[01] ~ "=" ~ .(round(BF01_at_b[1], 2)) ~ "/" ~ .(round(BF01_at_b[2], 2)) ~
+                  " when x = " ~ .(round(b.BF01[1], 2)) ~ " or " ~ .(round(b.BF01[2], 2))))
+  }
+
+
+  # Data frames for ggplot
+  df_bf10 <- data.frame(x = x, BF = BF10)
+  df_bf01 <- data.frame(x = x, BF = BF01)
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF10 ----------
+  x_breaks_10 <- sort(unique(c(0, n, round(b.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(x = x, y = BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = b.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, n), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "Number of successes",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    clean_theme
+
+  ## ---------- BF01 ----------
+  x_breaks_01 <- if (impossible) c(0, n)
+  else sort(unique(c(0, n, round(b.BF01, 2))))
+
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(x = x, y = BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(
+      xintercept = if (!impossible) b.BF01 else NA,
+      linetype = "dashed"
+    ) +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(0, n), breaks = x_breaks_01) +
+    ggplot2::labs(
+      x = "Number of successes",
+      y = expression("BF"[0][1] * " (log scale)"),
+      title = main.bf01
+    ) +
+    clean_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
+Power_e_bin <- function(D, h0, alpha, beta, location, scale, model, hypothesis,
+                        alpha_d, beta_d, location_d, scale_d, model_d, de_an_prior, N, e) {
 
-Power_e_bin<-function(D,h0,alpha,beta,location,scale,model,hypothesis,
-                    alpha_d,beta_d,location_d,scale_d,model_d, de_an_prior,N,e){
+  # Sample size range
+  smin <- 10
+  smax <- N * 1.2
+  sN <- ceiling(seq(smin, smax, length.out = 51))  # 51 points for smooth curves
 
-  smin = 10
-  smax = N*1.2
-  sN = ceiling(seq(smin,smax , by = (smax-smin)/50))
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(sN))
 
+  for (i in seq_along(sN)) {
 
-  TPE =  array(NA, dim = c(length(sN)))
-  FPE =  array(NA, dim = c(length(sN)))
-  TNE =  array(NA, dim = c(length(sN)))
-  FNE =  array(NA, dim = c(length(sN)))
+    x10 <- bin_e_BF_bound_10(D, sN[i], alpha, beta, location, scale, model, hypothesis, e)
+    x01 <- bin_e_BF_bound_01(D, sN[i], alpha, beta, location, scale, model, hypothesis, e)
 
-  for ( i in 1:length(sN)){
-    x10 = bin_e_BF_bound_10 (D,sN[i],alpha,beta,location,scale,model,hypothesis,e)
-    x01 = bin_e_BF_bound_01 (D,sN[i],alpha,beta,location,scale,model,hypothesis,e)
-
-
-    if(de_an_prior ==1){
-      TPE[i] = bin_e_TPE(x10,sN[i],h0,alpha,beta,location,scale,model,hypothesis,e)
-
-    }else{
-      TPE[i] = bin_e_TPE(x10,sN[i],h0,alpha_d,beta_d,location_d,scale_d,model_d,hypothesis,e)
+    # True Positive
+    TPE[i] <- if (de_an_prior == 1) {
+      bin_e_TPE(x10, sN[i], h0, alpha, beta, location, scale, model, hypothesis, e)
+    } else {
+      bin_e_TPE(x10, sN[i], h0, alpha_d, beta_d, location_d, scale_d, model_d, hypothesis, e)
     }
-    if(de_an_prior ==1){
-      FNE[i] = bin_e_FNE(x01,sN[i],h0,alpha,beta,location,scale,model,hypothesis,e)
 
-    }else{
-      FNE[i] = bin_e_FNE(x01,sN[i],h0,alpha_d,beta_d,location_d,scale_d,model_d,hypothesis,e)
+    # False Negative
+    FNE[i] <- if (de_an_prior == 1) {
+      bin_e_FNE(x01, sN[i], h0, alpha, beta, location, scale, model, hypothesis, e)
+    } else {
+      bin_e_FNE(x01, sN[i], h0, alpha_d, beta_d, location_d, scale_d, model_d, hypothesis, e)
     }
-    FPE[i]      <- bin_e_FPE(x10,sN[i],h0,alpha,beta,location,scale,model,hypothesis,e)
-    TNE[i]      <- bin_e_TNE(x01,sN[i],h0,alpha,beta,location,scale,model,hypothesis,e)
 
-
+    # False Positive & True Negative
+    FPE[i] <- bin_e_FPE(x10, sN[i], h0, alpha, beta, location, scale, model, hypothesis, e)
+    TNE[i] <- bin_e_TNE(x01, sN[i], h0, alpha, beta, location, scale, model, hypothesis, e)
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(sN, TPE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(sN,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
-  plot(sN, TNE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(sN,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
+  # Prepare data for ggplot
+  df_bf10 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sN,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf10$Type <- factor(df_bf10$Type, levels = c("True Positive", "False Positive"))
+
+  df_bf01 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sN,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df_bf01$Type <- factor(df_bf01$Type, levels = c("True Negative", "False Negative"))
+
+  # Colors
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # Legend theme
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # BF10 plot
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # BF01 plot
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Combine plots
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
 compute.prior.density.be.h1 <- function(h0,prop,alpha,beta,location,scale,model,hypothesis,e) {
@@ -2356,9 +2732,9 @@ bin_e_prior_plot <-function(h0,alpha,beta,location,scale,model,alpha_d,beta_d,lo
 
   # Base plot
   plot(prop, prior.analysis.h1, type = "l", lwd = 2,
-       xlab =bquote(bold(rho)),
+       xlab =bquote(atop(italic(theta))),
        ylab = "density",
-       main = bquote(bold("Prior distribution on "~rho~" under the alternative hypothesis")),
+       main = bquote(bold("Prior distribution on "~italic(theta)~"under the alternative hypothesis")),
        frame.plot = FALSE,
        ylim = c(0, ylim.max))
 
@@ -2441,7 +2817,7 @@ d_beta <- function(rho, alpha, beta,a,b) {
 
 
 # likelihood of non-local prior
-dnlp <-function(delta,mu,ta){
+dMoment <-function(delta,mu,ta){
   ((delta-mu)^2)/(sqrt(2*pi)*ta^3)*exp(-((delta-mu)^2)/(2*ta^2))
 }
 
@@ -2450,7 +2826,7 @@ r_prior<- function(rho,k,location,scale,dff,model, alpha, beta,a,b){
   switch(model,
          "Normal" = stats::dnorm(rho,location,scale),
          "d_beta"   = d_strechted_beta(rho,k,a,b),
-          "NLP"   = dnlp(rho,location,scale),
+          "Moment"   = dMoment(rho,location,scale),
           "t_dis" = tstude(rho,location,scale,dff),
          "beta" = d_beta(rho, alpha, beta,a,b))
 }
@@ -2494,13 +2870,13 @@ r_BF10<-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model){
     switch(model,
            "d_beta"   = 1,
            "beta" = 1,
-           "NLP"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
 
   }else{
     switch(model,
            "d_beta"   = p_beta(bound[2], 1/k, 1/k,-1,1)-p_beta(bound[1], 1/k,1/k,-1,1) ,
            "beta" = p_beta(bound[2], alpha, beta,-1,1)-p_beta(bound[1], alpha, beta,-1,1),
-           "NLP"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
 }
 
   # Define the integrand function for marginal likelihood under H1
@@ -2571,13 +2947,13 @@ r_TPE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model){
     switch(model,
            "d_beta"   = 1,
            "beta" = 1,
-           "NLP"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
 
   }else{
     switch(model,
            "d_beta"   = p_beta(bound[2], 1/k, 1/k,-1,1)-p_beta(bound[1], 1/k,1/k,-1,1) ,
            "beta" = p_beta(bound[2], alpha, beta,-1,1)-p_beta(bound[1], alpha, beta,-1,1),
-           "NLP"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
   }
   int <- function(rho) {
     prob <- switch(hypothesis,
@@ -2619,13 +2995,13 @@ r_FNE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model){
     switch(model,
            "d_beta"   = 1,
            "beta" = 1,
-           "NLP"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = { pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
 
   }else{
     switch(model,
            "d_beta"   = p_beta(bound[2], 1/k, 1/k,-1,1)-p_beta(bound[1], 1/k,1/k,-1,1) ,
            "beta" = p_beta(bound[2], alpha, beta,-1,1)-p_beta(bound[1], alpha, beta,-1,1),
-           "NLP"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
+           "Moment"   = {pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2)})
   }
   int <- function(rho) {
     prob <- switch(hypothesis,
@@ -2846,7 +3222,7 @@ compute.prior.density.r <- function(rho, k,location,scale,dff,model, alpha, beta
     switch(model,
            "Normal" = stats::pnorm(bound[2],location,scale)-stats::pnorm(bound[1],location,scale),
            "d_beta"   = p_beta(bound[2], 1/k, 1/k,min(bound),max(bound))-p_beta(bound[1], 1/k,1/k,min(bound),max(bound)) ,
-           "NLP"   = pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2),
+           "Moment"   = pmom(bound[2]-location, tau=scale^2)-pmom(bound[1]-location, tau=scale^2),
            "t_dis" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0),
            "beta" = p_beta(bound[2], alpha, beta,min(bound),max(bound))-p_beta(bound[1], alpha, beta,min(bound),max(bound)))
 
@@ -2903,122 +3279,211 @@ r_prior_plot <-function(k, alpha, beta,h0,location,scale,dff,model,de_an_prior,
 }
 
 
-r_bf10_p <-function(D,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model){
+r_bf10_p <- function(D, n, k, alpha, beta, h0, hypothesis,
+                     location, scale, dff, model) {
 
-  rr  <- seq(from = -.99,to = .99,.01)
+  rr <- seq(-0.99, 0.99, 0.01)
 
-  # Compute BF10 and t-bounds:
-  r.BF10 <- r_BF_bound_10(D,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model)
-  BF10 <- r_BF10(rr,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model)
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  # Left plot - BF10:
-  main.bf10 <- if (length(r.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when r = "~.(format(round(r.BF10, digits = 2)))))
-  } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when r = "~.(format(round(r.BF10[1], digits = 2)))~"or"~.(format(round(r.BF10[2], digits = 2)))))
-  }
-  plot(rr, BF10, type = "l", log = "y", xlab = "Correlation", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = r.BF10)
-  graphics::axis(1, c(-1, 1))
-  if (length(r.BF10)) graphics::axis(1, round(r.BF10, 2))
+  BF10   <- r_BF10(rr, n, k, alpha, beta, h0, hypothesis,
+                   location, scale, dff, model)
+  r.BF10 <- r_BF_bound_10(D, n, k, alpha, beta, h0, hypothesis,
+                          location, scale, dff, model)
 
-  # Left plot - BF01:
   BF01   <- 1 / BF10
-  r.BF01 <- r_BF_bound_01(D,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model)
+  r.BF01 <- r_BF_bound_01(D, n, k, alpha, beta, h0, hypothesis,
+                          location, scale, dff, model)
 
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / r_BF10(h0,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model)
-  impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(r.BF01, "bound cannot be found"))
+  max.BF01 <- 1 / r_BF10(h0, n, k, alpha, beta, h0, hypothesis,
+                         location, scale, dff, model)
 
-  plot(rr, BF01, type = "l", log = "y", xlab = "Correlation", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-1, 1))
-  if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+  impossible <- (hypothesis == "!=") &&
+    (max.BF01 < D || identical(r.BF01, "bound cannot be found"))
+
+  ## ---------- Titles ----------
+  main.bf10 <- if (length(r.BF10) == 1) {
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF10, 2))))
   } else {
-    graphics::abline(v = r.BF01)
-    graphics::axis(1, round(r.BF01, 2))
-    main.bf01 <- if (length(r.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when r = "~.(format(round(r.BF01, digits = 2)))))
-    } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when r = "~.(format(round(r.BF01[1], digits = 2)))~"or"~.(format(round(r.BF01[2], digits = 2)))))
-    }
-    graphics::title(main = main.bf01)
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF10[1], 2)) ~
+                  " or " ~ .(round(r.BF10[2], 2))))
   }
+
+  main.bf01 <- if (impossible) {
+    bquote(bold("It is impossible to have BF"[01] ~ "=" ~ .(D)))
+  } else if (length(r.BF01) == 1) {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF01, 2))))
+  } else {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF01[1], 2)) ~
+                  " or " ~ .(round(r.BF01[2], 2))))
+  }
+
+  df10 <- data.frame(r = rr, BF = BF10)
+  df01 <- data.frame(r = rr, BF = BF01)
+
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF10 ----------
+  x_breaks_10 <- sort(unique(c(-1, 1, round(r.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(r, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = r.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "Correlation",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    clean_theme
+
+  ## ---------- BF01 ----------
+  x_breaks_01 <- if (impossible) c(-1, 1)
+  else sort(unique(c(-1, 1, round(r.BF01, 2))))
+
+  p2 <- ggplot2::ggplot(df01, ggplot2::aes(r, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +   # ← all black now
+    ggplot2::geom_vline(
+      xintercept = if (!impossible) r.BF01 else NA,
+      linetype = "dashed"
+    ) +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = x_breaks_01) +
+    ggplot2::labs(
+      x = "Correlation",
+      y = expression("BF"[0][1] * " (log scale)"),
+      title = main.bf01
+    ) +
+    clean_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
-Power_r<-function(D,k, alpha, beta,h0,hypothesis,location,scale,dff,model,
-                  k_d, alpha_d, beta_d,location_d,scale_d,dff_d,model_d, de_an_prior,N){
 
-  # N range to evaluate power:
-  N.min     <- 4
-  N.max     <- ceiling(N * 1.2)
-  Ns        <- seq(N.min, N.max, length.out = 31)
-  TPE <- numeric(length(Ns))
-  FPE <- numeric(length(Ns))
-  TNE <- numeric(length(Ns))
-  FNE <- numeric(length(Ns))
+Power_r <- function(D, k, alpha, beta, h0, hypothesis,
+                    location, scale, dff, model,
+                    k_d, alpha_d, beta_d,
+                    location_d, scale_d, dff_d, model_d,
+                    de_an_prior, N) {
 
+  Ns <- seq(4, ceiling(N * 1.2), length.out = 31)
 
+  TPE <- FPE <- TNE <- FNE <- numeric(length(Ns))
 
   for (i in seq_along(Ns)) {
-    r10 <- r_BF_bound_10(D,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model)
-    r01 <- r_BF_bound_01(D,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model)
 
-    # Choose correct design prior:
+    r10 <- r_BF_bound_10(D, Ns[i], k, alpha, beta, h0, hypothesis,
+                         location, scale, dff, model)
+    r01 <- r_BF_bound_01(D, Ns[i], k, alpha, beta, h0, hypothesis,
+                         location, scale, dff, model)
+
     TPE[i] <- if (de_an_prior == 1)
-      r_TPE(r10,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model) else
-        r_TPE(r10,Ns[i],k_d, alpha_d, beta_d,h0,hypothesis,location_d,scale_d,dff_d,model_d)
-    FPE[i] <-  r_FPE(r10,Ns[i],h0,hypothesis)
+      r_TPE(r10, Ns[i], k, alpha, beta, h0, hypothesis,
+            location, scale, dff, model)
+    else
+      r_TPE(r10, Ns[i], k_d, alpha_d, beta_d, h0, hypothesis,
+            location_d, scale_d, dff_d, model_d)
+
+    FPE[i] <- r_FPE(r10, Ns[i], h0, hypothesis)
+
+    TNE[i] <- r_TNE(r01, Ns[i], h0, hypothesis)
+
     FNE[i] <- if (de_an_prior == 1)
-      r_FNE(r01,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model) else
-        r_FNE(r01,Ns[i],k_d, alpha_d, beta_d,h0,hypothesis,location_d,scale_d,dff_d,model_d)
-    TNE[i] <- r_TNE(r01,Ns[i],h0,hypothesis)
+      r_FNE(r01, Ns[i], k, alpha, beta, h0, hypothesis,
+            location, scale, dff, model)
+    else
+      r_FNE(r01, Ns[i], k_d, alpha_d, beta_d, h0, hypothesis,
+            location_d, scale_d, dff_d, model_d)
   }
 
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(Ns, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(Ns,FPE,col = "grey")
-  graphics::legend(x = N.max*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  ## ---------- Data ----------
+  df1 <- tidyr::pivot_longer(
+    data.frame(
+      SampleSize = Ns,
+      `True Positive`  = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
-  plot(Ns, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(Ns,FNE,col = "grey")
-  graphics::legend(x = N.max*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  df2 <- tidyr::pivot_longer(
+    data.frame(
+      SampleSize = Ns,
+      `True Negative`  = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
 
+  ## ---------- Style ----------
+  type_colors <- c(
+    "True Positive"  = "black",
+    "False Positive" = "grey50",
+    "True Negative"  = "black",
+    "False Negative" = "grey50"
+  )
 
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x  = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y  = ggplot2::element_text(size = 12),
+      plot.title   = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
 
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
 
+  ## ---------- Plots ----------
+  p1 <- ggplot2::ggplot(df1,
+                        ggplot2::aes(SampleSize, Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  p2 <- ggplot2::ggplot(df2,
+                        ggplot2::aes(SampleSize, Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
-
 
 # ---- Correlation_e.r ----
 r_auto_uniroot_fixed_lower <- function(f,lower, upper = 1, step = .05, max_attempts = 25) {
@@ -3086,7 +3551,7 @@ re_BF10i<-function(r,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                               "!=" = switch(model,
                                             "d_beta"       = 1-(p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                             "beta"         = 1-(p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                            "NLP"          = {
+                                            "Moment"          = {
                                               (pmom(1-location, tau = scale^2)-pmom(bound_h1[2]-location, tau = scale^2))+
                                                 (pmom(bound_h1[1]-location, tau = scale^2)-pmom(-1-location, tau = scale^2))
                                             }),
@@ -3094,20 +3559,20 @@ re_BF10i<-function(r,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                               "<"  = switch(model,
                                             "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                             "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                            "NLP"          = {
+                                            "Moment"          = {
                                               (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                             }),
                               ">"  = switch(model,
                                             "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                             "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                            "NLP"          = {
+                                            "Moment"          = {
                                               (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                             })
     )
     normalizationh0 <- switch(model,
                               "d_beta" = p_beta(bound_h0[2], 1/k, 1/k, -1, 1) - p_beta(bound_h0[1], 1/k, 1/k, -1, 1),
                               "beta"   = p_beta(bound_h0[2], alpha, beta, -1, 1) - p_beta(bound_h0[1], alpha, beta, -1, 1),
-                              "NLP"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
+                              "Moment"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
                               }
     )
 
@@ -3192,7 +3657,7 @@ re_TPE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                             "!=" = switch(model,
                                           "d_beta"       = 1-(p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = 1-(p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(1-location, tau = scale^2)-pmom(bound_h1[2]-location, tau = scale^2))+
                                               (pmom(bound_h1[1]-location, tau = scale^2)-pmom(-1-location, tau = scale^2))
                                           }),
@@ -3200,13 +3665,13 @@ re_TPE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                             "<"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           }),
                             ">"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           })
   )
@@ -3258,7 +3723,7 @@ re_FNE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                             "!=" = switch(model,
                                           "d_beta"       = 1-(p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = 1-(p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(1-location, tau = scale^2)-pmom(bound_h1[2]-location, tau = scale^2))+
                                               (pmom(bound_h1[1]-location, tau = scale^2)-pmom(-1-location, tau = scale^2))
                                           }),
@@ -3266,13 +3731,13 @@ re_FNE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
                             "<"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           }),
                             ">"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           })
   )
@@ -3314,7 +3779,7 @@ re_FPE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
   normalizationh0 <- switch(model,
                             "d_beta" = p_beta(bound_h0[2], 1/k, 1/k, -1, 1) - p_beta(bound_h0[1], 1/k, 1/k, -1, 1),
                             "beta"   = p_beta(bound_h0[2], alpha, beta, -1, 1) - p_beta(bound_h0[1], alpha, beta, -1, 1),
-                            "NLP"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
+                            "Moment"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
                             }
   )
 
@@ -3352,7 +3817,7 @@ re_TNE <-function(r,n,k, alpha, beta,h0,hypothesis,location,scale,dff,model,e){
   normalizationh0 <- switch(model,
                             "d_beta" = p_beta(bound_h0[2], 1/k, 1/k, -1, 1) - p_beta(bound_h0[1], 1/k, 1/k, -1, 1),
                             "beta"   = p_beta(bound_h0[2], alpha, beta, -1, 1) - p_beta(bound_h0[1], alpha, beta, -1, 1),
-                            "NLP"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
+                            "Moment"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
                             }
   )
 
@@ -3556,7 +4021,7 @@ compute.prior.density.re.h1 <- function(rho,h0, k,location,scale,dff,model, alph
                             "!=" = switch(model,
                                           "d_beta"       = 1-(p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = 1-(p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(1-location, tau = scale^2)-pmom(bound_h1[2]-location, tau = scale^2))+
                                               (pmom(bound_h1[1]-location, tau = scale^2)-pmom(-1-location, tau = scale^2))
                                           }),
@@ -3564,13 +4029,13 @@ compute.prior.density.re.h1 <- function(rho,h0, k,location,scale,dff,model, alph
                             "<"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           }),
                             ">"  = switch(model,
                                           "d_beta"       = (p_beta(bound_h1[2], 1/k, 1/k,-1,1) - p_beta(bound_h1[1], 1/k, 1/k,-1,1)),
                                           "beta"         = (p_beta(bound_h1[2], alpha, beta,-1,1) - p_beta(bound_h1[1], alpha, beta,-1,1)),
-                                          "NLP"          = {
+                                          "Moment"          = {
                                             (pmom(bound_h1[2]-location, tau = scale^2)-pmom(bound_h1[1]-location, tau = scale^2))
                                           })
   )
@@ -3596,7 +4061,7 @@ compute.prior.density.re.h0 <- function(rho,h0, k,location,scale,dff,model, alph
   normalizationh0 <- switch(model,
                             "d_beta" = p_beta(bound_h0[2], 1/k, 1/k, -1, 1) - p_beta(bound_h0[1], 1/k, 1/k, -1, 1),
                             "beta"   = p_beta(bound_h0[2], alpha, beta, -1, 1) - p_beta(bound_h0[1], alpha, beta, -1, 1),
-                            "NLP"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
+                            "Moment"    = {pmom(bound_h0[2]-location, tau = scale^2) - pmom(bound_h0[1]-location, tau = scale^2)
                             }
   )
 
@@ -3630,7 +4095,7 @@ re_prior_plot <-function(k, alpha, beta,h0,location,scale,dff,model,de_an_prior,
   prior.analysis.h1 <- compute.prior.density.re.h1(rr,h0, k,location,scale,dff,model, alpha, beta,hypothesis,e)
   prior.analysis.h0<- compute.prior.density.re.h0(rr,h0, k,location,scale,dff,model, alpha, beta,hypothesis,e)
   prior.design <- if (de_an_prior == 0 && model_d != "Point") {
-    compute.prior.density.re.h1(rr, k_d,location_d,scale_d,dff_d,model_d, alpha_d, beta_d,hypothesis,e)
+    compute.prior.density.re.h1(rr, h0,k_d,location_d,scale_d,dff_d,model_d, alpha_d, beta_d,hypothesis,e)
   } else {
     rep(NA, length(rr))
   }
@@ -3685,119 +4150,193 @@ re_prior_plot <-function(k, alpha, beta,h0,location,scale,dff,model,de_an_prior,
 
 
 
-re_bf10_p <-function(D,n,k,alpha,beta,h0,hypothesis,location,scale,dff,model,e){
+re_bf10_p <- function(D, n, k, alpha, beta, h0, hypothesis,
+                      location, scale, dff, model, e) {
 
-  rr  <- seq(from = -.99,to = .99,.01)
+  rr <- seq(-0.99, 0.99, 0.01)
 
-  # Compute BF10 and t-bounds:
-  r.BF10 <- re_BF_bound_10(D,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
-  BF10 <- re_BF10(rr,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  # Left plot - BF10:
-  main.bf10 <- if (length(r.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when r = "~.(format(round(r.BF10, digits = 2)))))
-  } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when r = "~.(format(round(r.BF10[1], digits = 2)))~"or"~.(format(round(r.BF10[2], digits = 2)))))
-  }
-  plot(rr, BF10, type = "l", log = "y", xlab = "Correlation", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = r.BF10)
-  graphics::axis(1, c(-1, 1))
-  if (length(r.BF10)) graphics::axis(1, round(r.BF10, 2))
+  # Compute BF10 and bounds
+  BF10   <- re_BF10(rr, n, k, alpha, beta, h0, hypothesis,
+                    location, scale, dff, model, e)
+  r.BF10 <- re_BF_bound_10(D, n, k, alpha, beta, h0, hypothesis,
+                           location, scale, dff, model, e)
 
-  # Left plot - BF01:
   BF01   <- 1 / BF10
-  r.BF01 <- re_BF_bound_01(D,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
+  r.BF01 <- re_BF_bound_01(D, n, k, alpha, beta, h0, hypothesis,
+                           location, scale, dff, model, e)
 
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / re_BF10(h0,n,k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
-  impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(r.BF01, "bound cannot be found"))
+  max.BF01 <- 1 / re_BF10(h0, n, k, alpha, beta, h0, hypothesis,
+                          location, scale, dff, model, e)
+  impossible <- (hypothesis == "!=") &&
+    (max.BF01 < D || identical(r.BF01, "bound cannot be found"))
 
-  plot(rr, BF01, type = "l", log = "y", xlab = "Correlation", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-1, 1))
-  if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+  ## ---------- Titles ----------
+  main.bf10 <- if (length(r.BF10) == 1) {
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF10, 2))))
   } else {
-    graphics::abline(v = r.BF01)
-    graphics::axis(1, round(r.BF01, 2))
-    main.bf01 <- if (length(r.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when r = "~.(format(round(r.BF01, digits = 2)))))
-    } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when r = "~.(format(round(r.BF01[1], digits = 2)))~"or"~.(format(round(r.BF01[2], digits = 2)))))
-    }
-    graphics::title(main = main.bf01)
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF10[1], 2)) ~
+                  " or " ~ .(round(r.BF10[2], 2))))
   }
+
+  main.bf01 <- if (impossible) {
+    bquote(bold("It is impossible to have BF"[01] ~ "=" ~ .(D)))
+  } else if (length(r.BF01) == 1) {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF01, 2))))
+  } else {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when r = " ~ .(round(r.BF01[1], 2)) ~
+                  " or " ~ .(round(r.BF01[2], 2))))
+  }
+
+
+
+  df10 <- data.frame(r = rr, BF = BF10)
+  df01 <- data.frame(r = rr, BF = BF01)
+
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # BF10 plot
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(r, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = r.BF10, linetype = "dashed", color = "black") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = sort(unique(c(-1, 1, round(r.BF10, 2))))) +
+    ggplot2::labs(
+      x = "Correlation",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    clean_theme
+
+  # BF01 plot
+  x_breaks_01 <- if (impossible) c(-1, 1) else sort(unique(c(-1, 1, round(r.BF01, 2))))
+
+  p2 <- ggplot2::ggplot(df01, ggplot2::aes(r, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +   # all black line
+    ggplot2::geom_vline(
+      xintercept = if (!impossible) r.BF01 else NA,
+      linetype = "dashed", color = "black"
+    ) +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-1, 1), breaks = x_breaks_01) +
+    ggplot2::labs(
+      x = "Correlation",
+      y = expression("BF"[0][1] * " (log scale)"),
+      title = main.bf01
+    ) +
+    clean_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
+Power_re <- function(D, k, alpha, beta, h0, hypothesis,
+                     location, scale, dff, model,
+                     k_d, alpha_d, beta_d, location_d, scale_d, dff_d, model_d,
+                     de_an_prior, N, e) {
 
-Power_re<-function(D,k, alpha, beta,h0,hypothesis,location,scale,dff,model,
-                  k_d, alpha_d, beta_d,location_d,scale_d,dff_d,model_d, de_an_prior,N,e){
-  # N range to evaluate power:
-  N.min     <- 4
-  N.max     <- ceiling(N * 1.2)
-  Ns        <- seq(N.min, N.max, length.out = 31)
-  TPE <- numeric(length(Ns))
-  FPE <- numeric(length(Ns))
-  TNE <- numeric(length(Ns))
-  FNE <- numeric(length(Ns))
+  # N range
+  N.min <- 4
+  N.max <- ceiling(N * 1.2)
+  Ns <- seq(N.min, N.max, length.out = 31)
+
+  TPE <- FPE <- TNE <- FNE <- numeric(length(Ns))
 
   for (i in seq_along(Ns)) {
-    r10 <-  re_BF_bound_10(D,Ns[i],k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
-    r01 <-  re_BF_bound_01(D,Ns[i],k,alpha, beta,h0,hypothesis,location,scale,dff,model,e)
+    r10 <- re_BF_bound_10(D, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e)
+    r01 <- re_BF_bound_01(D, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e)
 
-    # Choose correct design prior:
     TPE[i] <- if (de_an_prior == 1)
-      re_TPE(r10,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model,e) else
-        re_TPE(r10,Ns[i],k_d, alpha_d, beta_d,h0,hypothesis,location_d,scale_d,dff_d,model_d,e)
+      re_TPE(r10, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e) else
+        re_TPE(r10, Ns[i], k_d, alpha_d, beta_d, h0, hypothesis, location_d, scale_d, dff_d, model_d, e)
+
+    FPE[i] <- re_FPE(r10, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e)
+    TNE[i] <- re_TNE(r01, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e)
+
     FNE[i] <- if (de_an_prior == 1)
-      re_FNE(r01,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model,e) else
-        re_FNE(r01,Ns[i],k_d, alpha_d, beta_d,h0,hypothesis,location_d,scale_d,dff_d,model_d,e)
-    FPE[i]       <- re_FPE(r10,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model,e)
-    TNE[i]       <- re_TNE(r01,Ns[i],k, alpha, beta,h0,hypothesis,location,scale,dff,model,e)
+      re_FNE(r01, Ns[i], k, alpha, beta, h0, hypothesis, location, scale, dff, model, e) else
+        re_FNE(r01, Ns[i], k_d, alpha_d, beta_d, h0, hypothesis, location_d, scale_d, dff_d, model_d, e)
+  }
 
+  # Prepare data frames for ggplot
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Ns,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
-      }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(Ns, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(Ns,FPE,col = "grey")
-  graphics::legend(x = N.max*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Ns,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
 
-  plot(Ns, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(Ns,FNE,col = "grey")
-  graphics::legend(x = N.max*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
 
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  p1 <- ggplot2::ggplot(df1, ggplot2::aes(SampleSize, Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme + legend_theme
+
+  p2 <- ggplot2::ggplot(df2, ggplot2::aes(SampleSize, Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme + legend_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
-
-
 
 
 
@@ -3809,7 +4348,7 @@ pmom <- function(q,V1=1,tau=1) {
 }
 
 # Probability density function of non-local prior:
-dnlp <-function(delta,mu,ta){
+dMoment <-function(delta,mu,ta){
   ((delta-mu)^2)/(sqrt(2*pi)*ta^3)*exp(-((delta-mu)^2)/(2*ta^2))
 }
 # Probability density function of informed t prior:
@@ -3822,7 +4361,7 @@ t1_prior<- function(delta, location, scale, dff, model){
   switch(model,
          "Cauchy"         = tstude(delta, location, scale, 1),
          "Normal"         = stats::dnorm (delta, location, scale),
-         "NLP"            = dnlp  (delta, location, scale),
+         "Moment"            = dMoment  (delta, location, scale),
          "t-distribution" = tstude(delta, location, scale, dff))
 }
 
@@ -3843,7 +4382,7 @@ t1_BF10 <-function(t, df, model, location, scale, dff, hypothesis){
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
 
   for(i in 1:length(t)){
@@ -3918,7 +4457,7 @@ t1_TPE <- function(t, df, model, location, scale, dff) {
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
 
   int <- if (length(t) == 2) { # two-sided test
@@ -3934,7 +4473,7 @@ t1_TPE <- function(t, df, model, location, scale, dff) {
   }
 
   # setting error value such that error are prevented:
-  #error <- if (model == "NLP" && scale < 0.3) 1e-14 else if (scale > 0.3) .Machine$double.eps^0.25 else 1e-8
+  #error <- if (model == "Moment" && scale < 0.3) 1e-14 else if (scale > 0.3) .Machine$double.eps^0.25 else 1e-8
   error = 1e-4
   stats::integrate(int, lower = bound[1], upper = bound[2], rel.tol = error, stop.on.error = FALSE)$value
 }
@@ -3962,7 +4501,7 @@ t1_FNE <- function(t, df, model, location, scale, dff,hypothesis){
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
 
   int <- if (hypothesis =="!=") { # two-sided test
@@ -3978,7 +4517,7 @@ t1_FNE <- function(t, df, model, location, scale, dff,hypothesis){
   }
 
   # setting error value such that error are prevented:
-  #error <- if (model == "NLP" && scale < 0.3) 1e-14 else if (scale > 0.3) .Machine$double.eps^0.25 else 1e-8
+  #error <- if (model == "Moment" && scale < 0.3) 1e-14 else if (scale > 0.3) .Machine$double.eps^0.25 else 1e-8
   error = 1e-4
   stats::integrate(int, lower = bound[1], upper = bound[2], rel.tol = error, stop.on.error = FALSE)$value
 }
@@ -4203,118 +4742,218 @@ t1_prior_plot <- function(D, target, model, location, scale, dff, hypothesis,
 
 # plots for showing the relationship between BF and t-values
 
-# Plot BF10 and BF01 vs. t-values:
-bf10_t1 <-function(D = 3, df, target, model = "NA", location = 0, scale = 0.707, dff = 1, hypothesis) {
+bf10_t1 <- function(D = 3, df, target = 0.8,
+                    model = "NA", location = 0, scale = 0.707,
+                    dff = 1, hypothesis) {
+
   tt <- seq(-5, 5, 0.2)
 
-  # Compute BF10 and t-bounds:
+  # Compute BF10 and bounds
   BF10   <- t1_BF10(tt, df, model, location, scale, dff, hypothesis)
   t.BF10 <- t1_BF10_bound(D, df, model, location, scale, dff, hypothesis)
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  # Left plot - BF10:
-  main.bf10 <- if (length(t.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(round(t.BF10, digits = 2)))))
-  } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(round(t.BF10[1], digits = 2)))~"or"~.(format(round(t.BF10[2], digits = 2)))))
-  }
-  plot(tt, BF10, type = "l", log = "y", xlab = "t-value", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = t.BF10)
-  graphics::axis(1, c(-5, 5))
-  if (length(t.BF10)) graphics::axis(1, round(t.BF10, 2))
 
-  # Left plot - BF01:
   BF01   <- 1 / BF10
   t.BF01 <- t1_BF01_bound(D, df, model, location, scale, dff, hypothesis)
 
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / t1_BF10(0, df, model, location, scale, dff, hypothesis = "!=")
-  impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(t.BF01, "bound cannot be found"))
-
-  plot(tt, BF01, type = "l", log = "y", xlab = "t-value", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-5, 5))
-  if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+  # BF10 title
+  main.bf10 <- if (length(t.BF10) == 1) {
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when t = " ~ .(round(t.BF10, 2))))
   } else {
-    graphics::abline(v = t.BF01)
-    graphics::axis(1, round(t.BF01, 2))
-    main.bf01 <- if (length(t.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(round(t.BF01, digits = 2)))))
-    } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(round(t.BF01[1], digits = 2)))~"or"~.(format(round(t.BF01[2], digits = 2)))))
-    }
-    graphics::title(main = main.bf01)
+    bquote(bold("BF"[10] ~ "=" ~ .(D) ~ " when t = " ~ .(round(t.BF10[1], 2)) ~
+                  " or " ~ .(round(t.BF10[2], 2))))
   }
+
+  # Check if BF01 is impossible
+  impossible <- (hypothesis == "!=") &&
+    (max(BF01) < D || identical(t.BF01, "bound cannot be found"))
+
+  # BF01 title
+  main.bf01 <- if (impossible) {
+    bquote(bold("It is impossible to have BF"[01] ~ "=" ~ .(D)))
+  } else if (length(t.BF01) == 1) {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when t = " ~ .(round(t.BF01, 2))))
+  } else {
+    bquote(bold("BF"[0][1] ~ "=" ~ .(D) ~ " when t = " ~ .(round(t.BF01[1], 2)) ~
+                  " or " ~ .(round(t.BF01[2], 2))))
+  }
+
+
+
+  df_bf10 <- data.frame(tt = tt, BF = BF10)
+  df_bf01 <- data.frame(tt = tt, BF = BF01)
+
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF10 ----------
+  x_breaks_10 <- sort(unique(c(-5, 5, round(t.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df_bf10, ggplot2::aes(tt, BF)) +
+    ggplot2::geom_line(size = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = t.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "t-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    clean_theme
+
+  ## ---------- BF01 ----------
+  x_breaks_01 <- if (impossible) c(-5, 5)
+  else sort(unique(c(-5, 5, round(t.BF01, 2))))
+
+  p2 <- ggplot2::ggplot(df_bf01, ggplot2::aes(tt, BF)) +
+    ggplot2::geom_line(size = 1.2, color = "black") +   # ← FIXED LINE COLOR
+    ggplot2::geom_vline(
+      xintercept = if (!impossible) t.BF01 else NA,
+      linetype = "dashed"
+    ) +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_01) +
+    ggplot2::labs(
+      x = "t-value",
+      y = expression("BF"[0][1] * " (log scale)"),
+      title = main.bf01
+    ) +
+    clean_theme
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
+
 
 # Power curve function for BF10 > D under H1:
 Power_t1 <- function(D, model, location, scale, dff, hypothesis,
-                      model_d, location_d, scale_d, dff_d,
-                      de_an_prior, N) {
-  # df range to evaluate power:
-  df.min     <- 2
-  df.max     <- ceiling(N * 1.2)
-  dfs        <- seq(df.min, df.max, length.out = 31)
-  TPE <- numeric(length(dfs))
-  FPE <- numeric(length(dfs))
-  TNE <- numeric(length(dfs))
-  FNE <- numeric(length(dfs))
+                        model_d, location_d, scale_d, dff_d,
+                        de_an_prior, N) {
+
+  # df range
+  df.min <- 2
+  df.max <- ceiling(N * 1.2)
+  dfs <- seq(df.min, df.max, length.out = 31)
+
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(dfs))
 
   for (i in seq_along(dfs)) {
     t10 <- t1_BF10_bound(D, dfs[i], model, location, scale, dff, hypothesis)
     t01 <- t1_BF01_bound(D, dfs[i], model, location, scale, dff, hypothesis)
 
-    # Choose correct design prior:
-    TPE[i] <- if (de_an_prior == 1)
-      t1_TPE(t10, dfs[i], model, location, scale, dff) else
-        t1_TPE(t10, dfs[i], model_d, location_d, scale_d, dff_d)
-    FPE[i] <- t1_FPE(t10, dfs[i],hypothesis)
+    TPE[i] <- if (de_an_prior == 1) {
+      t1_TPE(t10, dfs[i], model, location, scale, dff)
+    } else {
+      t1_TPE(t10, dfs[i], model_d, location_d, scale_d, dff_d)
+    }
 
-    TNE[i] <-t1_TNE(t01, dfs[i],hypothesis)
-    FNE[i] <- if (de_an_prior == 1)
-      t1_FNE(t01, dfs[i], model, location, scale, dff,hypothesis) else
-        t1_FNE(t01, dfs[i], model_d, location_d, scale_d, dff_d,hypothesis)
+    FPE[i] <- t1_FPE(t10, dfs[i], hypothesis)
+    TNE[i] <- t1_TNE(t01, dfs[i], hypothesis)
+    FNE[i] <- if (de_an_prior == 1) {
+      t1_FNE(t01, dfs[i], model, location, scale, dff, hypothesis)
+    } else {
+      t1_FNE(t01, dfs[i], model_d, location_d, scale_d, dff_d, hypothesis)
+    }
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(dfs+1, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(dfs+1,FPE,col = "grey")
-  graphics::legend(x = df.max*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
+  # Prepare data for ggplot (check.names = FALSE avoids column name issues)
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = dfs + 1,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
-  plot(dfs+1, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(dfs+1,FNE,col = "grey")
-  graphics::legend(x = df.max*-.1,y=1.1,
-                   legend = c("True negative", "false negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = dfs + 1,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
 
+  # Colors for lines
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # Clean theme with larger axis labels and no background grid
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"), # increased font size for x-axis
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # Legend theme: inside top-left, no border, black first then gray
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # Plot BF10
+  p1 <- ggplot2::ggplot(df1, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Plot BF01
+  p2 <- ggplot2::ggplot(df2, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Combine plots side by side
+  combined_plot <- patchwork::wrap_plots(p1, p2, ncol = 2)
+
+  print(combined_plot)
 }
+
+
+
+
+
+
+
 
 
 
@@ -4351,7 +4990,7 @@ te_prior<- function(delta,location,scale,dff,model){
   switch(model,
         "Cauchy"        = tstude(delta,location, scale,1),
         "Normal"        = stats::dnorm(delta,location,scale),
-        "NLP"            = dnlp(delta,location,scale),
+        "Moment"            = dMoment(delta,location,scale),
         "t-distribution" = tstude(delta,location,scale,dff))
 
 
@@ -4366,7 +5005,7 @@ norm_h1 <- function(hypothesis, model, bound_h1, location, scale, dff = NULL) {
         stats::pcauchy(bound_h1[1], location, scale),
       "Normal"         = stats::pnorm(bound_h1[2], location, scale) -
         stats::pnorm(bound_h1[1], location, scale),
-      "NLP"            = pmom(bound_h1[2] - location, tau = scale^2) -
+      "Moment"            = pmom(bound_h1[2] - location, tau = scale^2) -
         pmom(bound_h1[1] - location, tau = scale^2),
       "t-distribution" = stats::pt((bound_h1[2] - location)/scale, df = dff) -
         stats::pt((bound_h1[1] - location)/scale, df = dff)
@@ -4378,7 +5017,7 @@ norm_h1 <- function(hypothesis, model, bound_h1, location, scale, dff = NULL) {
         stats::pcauchy(bound_h1[1], location, scale),
       "Normal"         = stats::pnorm(bound_h1[2], location, scale) -
         stats::pnorm(bound_h1[1], location, scale),
-      "NLP"            = pmom(bound_h1[2] - location, tau = scale^2),
+      "Moment"            = pmom(bound_h1[2] - location, tau = scale^2),
       "t-distribution" = stats::pt((bound_h1[2] - location)/scale, df = dff) -
         stats::pt((bound_h1[1] - location)/scale, df = dff)
     ),
@@ -4389,7 +5028,7 @@ norm_h1 <- function(hypothesis, model, bound_h1, location, scale, dff = NULL) {
         stats::pcauchy(bound_h1[1], location, scale),
       "Normal"         = stats::pnorm(bound_h1[2], location, scale) -
         stats::pnorm(bound_h1[1], location, scale),
-      "NLP"            = 1 - pmom(bound_h1[1] - location, tau = scale^2),
+      "Moment"            = 1 - pmom(bound_h1[1] - location, tau = scale^2),
       "t-distribution" = stats::pt((bound_h1[2] - location)/scale, df = dff) -
         stats::pt((bound_h1[1] - location)/scale, df = dff)
     )
@@ -4407,7 +5046,7 @@ norm_h0 <- function(model, bound_h0, location, scale, dff = NULL) {
     "Normal"         = stats::pnorm(bound_h0[2], location, scale) -
       stats::pnorm(bound_h0[1], location, scale),
 
-    "NLP"            = pmom(bound_h0[2] - location, tau = scale^2) -
+    "Moment"            = pmom(bound_h0[2] - location, tau = scale^2) -
       pmom(bound_h0[1] - location, tau = scale^2),
 
     "t-distribution" = stats::pt((bound_h0[2] - location)/scale, df = dff) -
@@ -4743,7 +5382,7 @@ t1e_table<-function(D,target,model,location,scale,dff, hypothesis,e ,
   bound01 = as.numeric(0)
   bound10 = as.numeric(0)
 
-  df <- if (mode_bf == "0") {
+  df <- if (mode_bf == 0) {
     N - 1
   } else {
     fun <- if (direct == "h1") t1e_N_finder else t1e_N_01_finder
@@ -4819,6 +5458,7 @@ compute.prior.density.te.h1 <- function(tt, model,location, scale, dff, hypothes
          )
   prior_h1
 }
+
 compute.prior.density.te.h0 <- function(tt, model,location, scale, dff, hypothesis,e) {
   if (model == "Point") return(rep(NA, length(tt)))
   bound_h0  <- switch(hypothesis,
@@ -4903,117 +5543,230 @@ t1e_prior_plot <- function(model,location, scale, dff, hypothesis, e,
          bty = "n")
 }
 
-te1_BF <-function(D,df,model ,location,scale,dff , hypothesis ,e){
+te1_BF<- function(D, df,
+                          model, location, scale, dff, hypothesis, e) {
+
   tt <- seq(-5, 5, 0.2)
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  # Compute BF10 and t-bounds:
-  BF10   <- t1e_BF10(tt,df,model,location,scale,dff , hypothesis,e )
-  t.BF10 <- t1e_BF10_bound(D, df,model,location,scale,dff , hypothesis,e)
 
-  # Left plot - BF10:
+  ## ---------- BF10 ----------
+  BF10   <- t1e_BF10(tt, df, model, location, scale, dff, hypothesis, e)
+  t.BF10 <- t1e_BF10_bound(D, df, model, location, scale, dff, hypothesis, e)
+
+  df10 <- data.frame(t = tt, BF = BF10)
+
   main.bf10 <- if (length(t.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(round(format(t.BF10, digits = 2)))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10, 2))))
   } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(round(t.BF10[1], digits = 2)))~"or"~.(format(round(t.BF10[2], digits = 2)))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10[1], 2))~
+                  " or "~.(round(t.BF10[2], 2))))
   }
-  plot(tt, BF10, type = "l", log = "y", xlab = "t-value", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n",xlim = c(-5,5))
-  graphics::abline(v = t.BF10)
-  graphics::axis(1, c(-5, 5))
-  if (length(t.BF10)) {graphics::axis(1, round(t.BF10, 2))}
 
-  # right plot - BF01:
+  x_breaks_10 <- sort(unique(c(-5, 5, round(t.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(t, BF)) +
+    ggplot2::geom_line(linewidth = 1.1) +
+    ggplot2::scale_y_log10() +
+    ggplot2::geom_vline(xintercept = t.BF10) +
+    ggplot2::scale_x_continuous(
+      limits = c(-5, 5),
+      breaks = x_breaks_10
+    ) +
+    ggplot2::labs(
+      x = "t-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 13, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 11),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF01 ----------
   BF01   <- 1 / BF10
-  t.BF01 <- t1e_BF01_bound(D, df,model,location,scale,dff , hypothesis,e)
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / t1e_BF10(0,df,model,location,scale,dff , hypothesis,e )
+  t.BF01 <- t1e_BF01_bound(D, df, model, location, scale, dff, hypothesis, e)
+
+  df01 <- data.frame(t = tt, BF = BF01)
+
+  max.BF01   <- 1 / t1e_BF10(0, df, model, location, scale, dff, hypothesis, e)
   impossible <- (max.BF01 < D || identical(t.BF01, "bound cannot be found"))
 
-  plot(tt, BF01, type = "l", log = "y", xlab = "t-value", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-5, 5))
   if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.1) +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(
+        limits = c(-5, 5),
+        breaks = c(-5, 5)
+      ) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"['01'] * " (log scale)"),
+        title = bquote(bold("It is impossible to have BF"[01]~"="~.(D)))
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
+
   } else {
-    graphics::abline(v = t.BF01)
-    graphics::axis(1, round(t.BF01, 2))
+
     main.bf01 <- if (length(t.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(round(t.BF01, digits = 2)))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01, 2))))
     } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(round(t.BF01[1], digits = 2)))~"or"~.(format(round(t.BF01[2], digits = 2)))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01[1], 2))~
+                    " or "~.(round(t.BF01[2], 2))))
     }
-    graphics::title(main = main.bf01)
+
+    x_breaks_01 <- sort(unique(c(-5, 5, round(t.BF01, 2))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.1) +
+      ggplot2::scale_y_log10() +
+      ggplot2::geom_vline(xintercept = t.BF01) +
+      ggplot2::scale_x_continuous(
+        limits = c(-5, 5),
+        breaks = x_breaks_01
+      ) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"[0][1] * " (log scale)"),
+        title = main.bf01
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
   }
 
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
-Power_t1e<-function(D,model,location,scale,dff, hypothesis,
-                   model_d,location_d,scale_d,dff_d, de_an_prior,N,e){
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 1))
-  # df range to evaluate power:
-  df.min     <- 2
-  df.max     <- ceiling(N * 1.2)
-  dfs        <- seq(df.min, df.max, length.out = 30)
-  TPE <- numeric(length(dfs))
-  FPE <- numeric(length(dfs))
-  TNE <- numeric(length(dfs))
-  FNE <- numeric(length(dfs))
 
+Power_t1e<- function(D, model, location, scale, dff, hypothesis,
+                         model_d, location_d, scale_d, dff_d,
+                         de_an_prior, N, e) {
+
+  # df range
+  df.min <- 2
+  df.max <- ceiling(N * 1.2)
+  dfs <- seq(df.min, df.max, length.out = 30)
+
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(dfs))
 
   for (i in seq_along(dfs)) {
-    t10 <- t1e_BF10_bound(D, dfs[i],model,location,scale,dff , hypothesis,e)
-    t01 <- t1e_BF01_bound(D, dfs[i],model,location,scale,dff , hypothesis,e)
+    t10 <- t1e_BF10_bound(D, dfs[i], model, location, scale, dff, hypothesis, e)
+    t01 <- t1e_BF01_bound(D, dfs[i], model, location, scale, dff, hypothesis, e)
 
-    # Choose correct design prior:
-    TPE[i] <- if (de_an_prior == 1)
-      t1e_TPE(t10,dfs[i],model ,location,scale,dff , hypothesis ,e) else
-        t1e_TPE(t,dfs[i],model_d ,location_d,scale_d,dff_d , hypothesis ,e)
-    FPE[i] <- t1e_FPE(t10,dfs[i],model ,location,scale,dff , hypothesis ,e)
-    TNE[i] <- t1e_TNE(t01,dfs[i],model ,location,scale,dff , hypothesis ,e)
-    FNE[i] <- if (de_an_prior == 1)
-      t1e_FNE(t01,dfs[i],model ,location,scale,dff , hypothesis ,e) else
-        t1e_FNE(t01,dfs[i],model_d ,location_d,scale_d,dff_d , hypothesis ,e)
+    # Choose correct design prior
+    TPE[i] <- if (de_an_prior == 1) {
+      t1e_TPE(t10, dfs[i], model, location, scale, dff, hypothesis, e)
+    } else {
+      t1e_TPE(t10, dfs[i], model_d, location_d, scale_d, dff_d, hypothesis, e)
+    }
 
+    FPE[i] <- t1e_FPE(t10, dfs[i], model, location, scale, dff, hypothesis, e)
+    TNE[i] <- t1e_TNE(t01, dfs[i], model, location, scale, dff, hypothesis, e)
+    FNE[i] <- if (de_an_prior == 1) {
+      t1e_FNE(t01, dfs[i], model, location, scale, dff, hypothesis, e)
+    } else {
+      t1e_FNE(t01, dfs[i], model_d, location_d, scale_d, dff_d, hypothesis, e)
+    }
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(dfs+1, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(dfs+1,FPE,col = "grey")
-  graphics::legend(x = df.max*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-  plot(dfs+1, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(dfs+1,FNE,col = "grey")
-  graphics::legend(x = df.max*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  # Prepare data frames for ggplot
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = dfs + 1,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = dfs + 1,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
 
+  # Colors
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
+  )
+
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"), # increased font size for x-axis
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  # Legend theme
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  # BF10 plot
+  p1 <- ggplot2::ggplot(df1, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # BF01 plot
+  p2 <- ggplot2::ggplot(df2, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  # Combine plots side by side
+  patchwork::wrap_plots(p1, p2, ncol = 2)
 }
 
 
@@ -5109,6 +5862,8 @@ pro_table_p2<-function(D,target, a0, b0, a1, b1, a2, b2, r,model1,da1,db1,dp1,mo
 }
 
 
+
+
 p2_prior_plot<-function(a,b,ad,bd,dp,model,nu){
   oldpar <- graphics::par(no.readonly = TRUE)
   base::on.exit(graphics::par(oldpar))
@@ -5125,11 +5880,12 @@ p2_prior_plot<-function(a,b,ad,bd,dp,model,nu){
   ylim.max <- max(prior.analysis, prior.design, na.rm = TRUE)
 
   plot(prop, prior.analysis, type = "l", lwd = 2,
-       xlab = substitute(bold(p[nu_val]), list(nu_val = nu)),
+       xlab = substitute(bold(theta[nu_val]), list(nu_val = nu)),
        ylab = "density",
-       main = bquote(bold("Prior distribution on "~p[.(nu)]~"")),
+       main = bquote(bold("Prior distribution on "~theta[.(nu)])),
        frame.plot = FALSE,
        ylim = c(0, ylim.max))
+
 
   if (model != "same") {
     if (model == "Point")
@@ -5147,128 +5903,119 @@ p2_prior_plot<-function(a,b,ad,bd,dp,model,nu){
 }
 
 
-Power_p2<-function(D,n1, a0, b0, a1, b1, a2, b2, r,model1,da1,db1,dp1,model2,da2,db2,dp2){
-  smax = n1*1.2
-  Ns = ceiling(seq(10,smax,by = (smax-10)/20))
-  n2 = Ns*r
-  Nt= Ns+n2
-  TPE =  array(NA, dim = c(length(Ns)))
-  FPE =  array(NA, dim = c(length(Ns)))
-  TNE =  array(NA, dim = c(length(Ns)))
-  FNE =  array(NA, dim = c(length(Ns)))
+Power_p2 <- function(D, n1, a0, b0, a1, b1, a2, b2, r,
+                     model1, da1, db1, dp1,
+                     model2, da2, db2, dp2) {
 
-  for(i in 1:length(Ns)){
+  # Define sample size range
+  smax <- n1 * 1.2
+  Ns <- ceiling(seq(10, smax, by = (smax - 10) / 20))
+  n2 <- Ns * r
+  Nt <- Ns + n2
 
-    n2 = Ns[i]*r
-    grid <- BF_grid_rcpp(D, a0, b0, a1, b1, Ns[i], a2, b2, n2,model1,da1,db1,dp1,model2,da2,db2,dp2)
-    TPE[i] <- sum_rcpp(grid$log_h1_dp,grid$PE)
-    FPE[i] <- sum_rcpp(grid$log_h0,grid$PE)
-    TNE[i] <- sum_rcpp(grid$log_h0,grid$NE)
-    FNE[i] <- sum_rcpp(grid$log_h1_dp,grid$NE)
+  # Initialize probability vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(Ns))
 
+  # Compute probabilities for each Ns
+  for (i in seq_along(Ns)) {
+    n2 <- Ns[i] * r
+    grid <- BF_grid_rcpp(D, a0, b0, a1, b1, Ns[i],
+                         a2, b2, n2,
+                         model1, da1, db1, dp1,
+                         model2, da2, db2, dp2)
+    TPE[i] <- sum_rcpp(grid$log_h1_dp, grid$PE)
+    FPE[i] <- sum_rcpp(grid$log_h0, grid$PE)
+    TNE[i] <- sum_rcpp(grid$log_h0, grid$NE)
+    FNE[i] <- sum_rcpp(grid$log_h1_dp, grid$NE)
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
 
-  plot(Nt, TPE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(Nt,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  # Prepare data frames for ggplot
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Nt,
+      `True Positive` = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
-  plot(Nt, TNE, type = "l",
-       xlab = "Sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(Nt,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = Nt,
+      `True Negative` = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
 
-
-
-}
-
-
-
-heatmap_p2_0 <- function(x, D) {
-  # Prepare data
-  df <- data.frame(
-    k1 = x$k1,
-    k2 = x$k2,
-    PE = x$PE,
-    NE = x$NE,
-    BF = x$log_BF10
+  # Colors
+  type_colors <- c(
+    "True Positive" = "black",
+    "False Positive" = "grey50",
+    "True Negative" = "black",
+    "False Negative" = "grey50"
   )
 
-  # Derive effect type
-  df$effect <- with(df, ifelse(PE == 1, "PE",
-                               ifelse(NE == 1, "NE", "None")))
+  # Clean theme
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 12),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
 
-  # Legend labels using bquote for math
-  labels <- c(
-    "PE"   = bquote(BF[10] > .(D)),
-    "NE"   = bquote(BF[0][1] > .(D)),
-    "None" = bquote(1 / .(D) < BF[10] ~ "<" ~ .(D))
+  # Legend theme
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
   )
 
-  # ---- First heatmap: classification ----
-  p1 <- ggplot2::ggplot(
-    df,
-    ggplot2::aes(x = .data$k1, y = .data$k2, fill = .data$effect)
-  ) +
-    ggplot2::geom_tile() +
-    ggplot2::scale_fill_manual(
-      name = "classification",
-      values = c("PE" = "#440154", "NE" = "#21908C", "None" = "#FDE725"),
-      labels = labels
-    ) +
+  # Plot BF10
+  p1 <- ggplot2::ggplot(df1, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
     ggplot2::labs(
-      title = "BF and number of success",
-      x = "x1",
-      y = "x2"
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
     ) +
-    ggplot2::coord_fixed() +
-    ggplot2::theme_minimal()
+    clean_theme +
+    legend_theme
 
-  # ---- Second heatmap: BF values ----
-  p2 <- ggplot2::ggplot(
-    df,
-    ggplot2::aes(x = .data$k1, y = .data$k2, fill = .data$BF)
-  ) +
-    ggplot2::geom_tile() +
-    ggplot2::scale_fill_viridis_c(name = "BF") +
+  # Plot BF01
+  p2 <- ggplot2::ggplot(df2, ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
     ggplot2::labs(
-      title = "Heatmap of BF",
-      x = "k1",
-      y = "k2"
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
     ) +
-    ggplot2::coord_fixed() +
-    ggplot2::theme_minimal()
+    clean_theme +
+    legend_theme
 
-  # Return both plots as a list
-  list(classification = p1, BF = p2)
+  # Combine plots
+  combined_plot <- patchwork::wrap_plots(p1, p2, ncol = 2)
+
+  print(combined_plot)
 }
-
-
 
 
 heatmap_p2 <- function(x, D) {
@@ -5319,7 +6066,7 @@ heatmap_p2 <- function(x, D) {
     ggplot2::scale_fill_viridis_c(name = "log BF10") +
     ggplot2::labs(
       title = "Heatmap of BF",
-      x = "k1", y = "k2"
+      x = "x1", y = "x2"
     ) +
     ggplot2::coord_fixed() +
     ggplot2::theme_minimal()
@@ -5470,7 +6217,7 @@ output$bin_upper<-shiny::renderUI({
  bin = input_bin()
 
   table_html <-  paste0('
-                        \\theta_0 - \\epsilon = ', bin$location+bin$ubbin,'')
+                        \\theta_0 + \\epsilon = ', bin$location+bin$ubbin,'')
 
   shiny::tagList(
     # Render the table using MathJax
@@ -5488,7 +6235,8 @@ output$bin_upper<-shiny::renderUI({
 shiny::observeEvent(input$runbin, {
   bin = input_bin()
 
-  dat <- tryCatch({switch(bin$interval,
+  dat <- tryCatch({
+    suppressWarnings(switch(bin$interval,
                 "1" = {bin_table(bin$D,bin$target,bin$h0,bin$alpha,bin$beta,bin$location,
                   bin$scale,bin$model,bin$hypothesis,
                   bin$alpha_d,bin$beta_d,bin$location_d,bin$scale_d,
@@ -5498,7 +6246,9 @@ shiny::observeEvent(input$runbin, {
                                  bin$scale,bin$model,bin$hypothesis,
                                  bin$alpha_d,bin$beta_d,bin$location_d,bin$scale_d,
                                  bin$model_d,bin$de_an_prior,bin$N, bin$mode_bf,bin$FP,bin$e,bin$direct)
-                  })}, error = function(e) {
+
+
+                  }))}, error = function(e) {
                     "Error"
                   })
 
@@ -5511,10 +6261,11 @@ shiny::observeEvent(input$runbin, {
                                  bin$alpha_d,bin$beta_d,bin$location_d,
                                  bin$scale_d,bin$model_d,bin$hypothesis,
                                  bin$de_an_prior)},
-           "2" =bin_e_prior_plot (bin$h0,bin$alpha,bin$beta,bin$location,bin$scale,
+           "2" = bin_e_prior_plot (bin$h0,bin$alpha,bin$beta,bin$location,bin$scale,
                                   bin$model,bin$alpha_d,bin$beta_d,bin$location_d,
                                   bin$scale_d,bin$model_d,
-                                  bin$hypothesis,bin$de_an_prior,bin$e))
+                                  bin$hypothesis,bin$de_an_prior,bin$e)
+           )
 
 
 
@@ -5529,12 +6280,12 @@ shiny::observeEvent(input$runbin, {
     \\begin{array}{l c}
     \\textbf{Probability of Compelling Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{10} > ', bin$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1], 3), ' \\\\
-    p\\text{(BF}_{01} > ', bin$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[3], 3), ' \\\\
+    p\\text{(BF}_{10} > ', bin$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{01} > ', bin$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[3], 3), nsmall = 3), ' \\\\
     \\textbf{Probability of Misleading Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{01} > ', bin$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[2], 3), ' \\\\
-    p\\text{(BF}_{10} > ', bin$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[4], 3), ' \\\\
+    p\\text{(BF}_{01} > ', bin$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[2], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{10} > ', bin$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[4], 3), nsmall = 3), ' \\\\
     \\textbf{Required Sample Size} & \\\\
     \\hline
     \\text{N} & ', dat[5], ' \\\\
@@ -5549,55 +6300,133 @@ shiny::observeEvent(input$runbin, {
       )
     )
   })
-
-  if (bin$pc) {
-    switch(bin$interval,
-           "1" = Power_bin(bin$D,bin$h0,bin$alpha,bin$beta,bin$location,bin$scale,bin$model,bin$hypothesis,
-                           bin$alpha_d,bin$beta_d,bin$location_d,
-                           bin$scale_d,bin$model_d, bin$de_an_prior,dat[1,5]),
-           "2" = Power_e_bin(bin$D,bin$h0,bin$alpha,bin$beta,bin$location,bin$scale,bin$model,bin$hypothesis,
-                             bin$alpha_d,bin$beta_d,bin$location_d,
-                             bin$scale_d,bin$model_d, bin$de_an_prior,dat[1,5],bin$e))
-
-    pc_bin <- grDevices::recordPlot()
-  } else pc_bin <- NA
+  # Define reactive containers OUTSIDE the if blocks
+  pc_bin   <- shiny::reactiveVal(NULL)
+  rela_bin <- shiny::reactiveVal(NULL)
 
 
-  if (bin$rela) {
-    switch(bin$interval,
-           "1" =bin_bf10(bin$D,dat[1,5],bin$alpha,bin$beta,bin$location,bin$scale,bin$model,bin$hypothesis),
-           "2" =bin_e_bf10(bin$D,dat[1,5],bin$alpha,bin$beta,bin$location,bin$scale,bin$model,bin$hypothesis,bin$e) )
+  # ===================================================
+  #               POWER CURVE (bin)
+  # ===================================================
 
-    rela_bin <- grDevices::recordPlot()
-  } else rela_bin <- NA
+  if (isTRUE(bin$pc)) {
 
+    if (identical(dat, "Error")) {
 
-  output$Optional_Plots_bin <- shiny::renderUI({
-    shiny::tagList(
-      if (bin$pc) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          output$PCbin <- shiny::renderPlot({
-
-            pc_bin
-
-          })
+      output$plot_power_bin_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
         )
-      },
-      if (bin$rela) {
+      })
+
+      output$plot_power_bin <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_bin_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          output$bfrbin <- shiny::renderPlot({
-
-            rela_bin
-
-          })
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_power_bin <- shiny::renderPlot({
+
+        suppressWarnings(
+          switch(
+            bin$interval,
+
+            "1" = Power_bin(
+              bin$D, bin$h0, bin$alpha, bin$beta, bin$location, bin$scale,
+              bin$model, bin$hypothesis,
+              bin$alpha_d, bin$beta_d, bin$location_d,
+              bin$scale_d, bin$model_d, bin$de_an_prior,
+              dat[1, 5]
+            ),
+
+            "2" = Power_e_bin(
+              bin$D, bin$h0, bin$alpha, bin$beta, bin$location, bin$scale,
+              bin$model, bin$hypothesis,
+              bin$alpha_d, bin$beta_d, bin$location_d,
+              bin$scale_d, bin$model_d, bin$de_an_prior,
+              dat[1, 5], bin$e
+            )
+          )
+        )
+
+        pc_bin(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    pc_bin(NULL)
+    output$plot_power_bin_text <- shiny::renderUI(NULL)
+    output$plot_power_bin      <- shiny::renderPlot(NULL)
+  }
 
 
+  # ===================================================
+  #           RELATIONSHIP BETWEEN BF & DATA (bin)
+  # ===================================================
+
+  if (isTRUE(bin$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_bin_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_rel_bin <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_bin_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
+        )
+      })
+
+      output$plot_rel_bin <- shiny::renderPlot({
+
+        n <- dat[1, 5]
+
+        suppressWarnings(
+          switch(
+            bin$interval,
+
+            "1" = bin_bf10(
+              bin$D, n, bin$alpha, bin$beta, bin$location, bin$scale,
+              bin$model, bin$hypothesis
+            ),
+
+            "2" = bin_e_bf10(
+              bin$D, n, bin$alpha, bin$beta, bin$location, bin$scale,
+              bin$model, bin$hypothesis, bin$e
+            )
+          )
+        )
+
+        rela_bin(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_bin(NULL)
+    output$plot_rel_bin_text <- shiny::renderUI(NULL)
+    output$plot_rel_bin      <- shiny::renderPlot(NULL)
+  }
 
   output$export_bin <- shiny::downloadHandler(
     filename = function() {
@@ -5612,7 +6441,7 @@ shiny::observeEvent(input$runbin, {
       rmarkdown::render(
         input = tempReport,output_format ="html_document",
         output_file = file,
-        params = list(bin = bin, dat = dat,pc_bin=pc_bin,rela_bin=rela_bin),  # ✅ pass to `params`
+        params = list(bin = bin, dat = dat,pc_bin=pc_bin(),rela_bin=rela_bin()),  # ✅ pass to `params`
         envir = new.env(parent = globalenv())  # environment still required
       )
     }
@@ -5632,33 +6461,71 @@ shiny::observeEvent(input$calbin, {
 
   output$BFbin <- shiny::renderUI({
     # Create the LaTeX formatted strings for the table
+    ROPE    <- switch(bin$interval,"1"=NULL,"2"=bin$e)
+    p.value <- bin.pval(bin$Suc,bin$N,bin$h0,bin$hypothesis,ROPE)
     table_html <- paste0('
-    N = ', bin$N, ', x = ', bin$Suc, '; \\textit{BF}_{10} = ', round(BF10, 4), ', \\textit{BF}_{01} = ',round(1/BF10, 4),'
+    N = ', bin$N, ', x = ', bin$Suc,', \\textit{p} = ',round(p.value,4), ',\\\\ \\textit{BF}_{10} = ', round(BF10, 4), ', \\textit{BF}_{01} = ',round(1/BF10, 4),'
 ')
 
     output$result_bin <- shiny::renderText({
-
       args <- list(
         x = bin$Suc,
         n = bin$N,
-        alpha = bin$alpha,
-        beta = bin$beta,
-        location = bin$location,
-        scale = bin$scale,
+        h0 = bin$location,
         model = bin$model,
         hypothesis = bin$hypothesis
       )
 
-      if (bin$interval != 1) {
+      # Add model-specific parameters
+      if (bin$model == "beta") {
+        args$alpha <- bin$alpha
+        args$beta  <- bin$beta
+      } else if (bin$model == "Moment") {
+        args$scale <- bin$scale
+      }
+
+      # Include e only if interval != 1
+      if (!is.null(bin$interval) && bin$interval != 1) {
         args$e <- bin$e
       }
 
+      fmt_val <- function(x) {
+        if (is.numeric(x) && length(x) == 1) return(as.character(x))
+        if (is.numeric(x) && length(x) > 1) return(paste(x, collapse = ", "))
+        if (is.character(x)) return(shQuote(x))
+        return(as.character(x))
+      }
+
       # Build string with each argument on a new line
-      arg_strings <- sapply(names(args), function(nm) {
-        if (nm == "e" && length(args[[nm]]) > 1) {
-          sprintf("  e = c(%s)", paste(fmt_val(args[[nm]]), collapse = ", "))
+      arg_strings <- sapply(names(args), function(arg) {
+
+        val <- args[[arg]]
+        arg_print <- arg  # default printed name
+
+        ## model → prior_analysis
+        if (arg == "model") arg_print <- "prior_analysis"
+
+        ## e → ROPE
+        if (arg == "e") arg_print <- "ROPE"
+
+        ## hypothesis → alternative
+        if (arg == "hypothesis") {
+
+          arg_print <- "alternative"
+
+          val <- switch(val,
+                        "<"  = "less",
+                        "!=" = "two.sided",
+                        ">"  = "greater",
+                        stop("Invalid hypothesis")
+          )
+        }
+
+        # Format e as c(...) if vector
+        if (arg == "e" && length(val) > 1) {
+          sprintf("  %s = c(%s)", arg_print, paste(fmt_val(val), collapse = ", "))
         } else {
-          sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
+          sprintf("  %s = %s", arg_print, fmt_val(val))
         }
       })
 
@@ -5670,6 +6537,7 @@ shiny::observeEvent(input$calbin, {
       )
 
       call_string
+
     })
 
 
@@ -5900,12 +6768,12 @@ shiny::observeEvent(input$runf, {
     \\begin{array}{l c}
     \\textbf{Probability of Compelling Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{10} > ', ff$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1], 3), ' \\\\
-    p\\text{(BF}_{01} > ', ff$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[3], 3), ' \\\\
+    p\\text{(BF}_{10} > ', ff$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{01} > ', ff$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[3], 3), nsmall = 3), ' \\\\
     \\textbf{Probability of Misleading Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{01} > ', ff$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[2], 3), ' \\\\
-    p\\text{(BF}_{10} > ', ff$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[4], 3), ' \\\\
+    p\\text{(BF}_{01} > ', ff$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[2], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{10} > ', ff$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[4], 3), nsmall = 3), ' \\\\
     \\textbf{Required Sample Size} & \\\\
     \\hline
     \\text{N} & ', dat[5], ' \\\\
@@ -5920,50 +6788,133 @@ shiny::observeEvent(input$runf, {
       )
     )
   })
-
-  if (ff$pc) {
-    switch(ff$inter,
-           "1" = Power_f(ff$D,ff$k,ff$p,ff$dff,ff$rscale,ff$f_m,ff$model,ff$k_d,ff$p_d,
-                         ff$dff_d,ff$rscale_d,ff$f_m_d,ff$model_d,ff$de_an_prior,dat[1,5]),
-           "2" = Power_fe(ff$D,ff$k,ff$p,ff$dff,ff$rscale,
-                          ff$f_m,ff$model,ff$k_d,ff$p_d,ff$dff_d,ff$rscale_d,ff$f_m_d,ff$model_d,ff$de_an_prior,dat[1,5],ff$e))
-
-      pc_f <- grDevices::recordPlot()
-  } else pc_f <- NA
-
-  if (ff$rela) {
-    switch(ff$inter,
-           "1" = bf10_f(ff$D,dat[1,5],ff$k,ff$p,ff$dff,ff$rscale,ff$f_m,ff$model),
-           "2" = bf10_fe(ff$D,dat[1,5],ff$k,ff$p,ff$dff,ff$rscale,ff$f_m,ff$model,ff$e))
-    rela_f <- grDevices::recordPlot()
-  } else rela_f <- NA
+  # Define reactive containers OUTSIDE the if blocks
+  pc_f   <- shiny::reactiveVal(NULL)
+  rela_f <- shiny::reactiveVal(NULL)
 
 
+  # ===================================================
+  #               POWER CURVE (F)
+  # ===================================================
 
-  output$Optional_Plots_f <- shiny::renderUI({
-    shiny::tagList(
-      if (ff$pc) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          output$PCf <- shiny::renderPlot({
+  if (isTRUE(ff$pc)) {
 
-            pc_f
+    if (identical(dat, "Error")) {
 
-          })
+      output$plot_power_f_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
         )
-      },
-      if (ff$rela) {
+      })
+
+      output$plot_power_f <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_f_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          output$bfrf <- shiny::renderPlot({
-
-            rela_f
-
-          })
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_power_f <- shiny::renderPlot({
+
+        suppressWarnings(
+          switch(
+            ff$inter,
+
+            "1" = Power_f(
+              ff$D, ff$k, ff$p, ff$dff, ff$rscale,
+              ff$f_m, ff$model,
+              ff$k_d, ff$p_d, ff$dff_d, ff$rscale_d, ff$f_m_d, ff$model_d,
+              ff$de_an_prior,
+              dat[1, 5]
+            ),
+
+            "2" = Power_fe(
+              ff$D, ff$k, ff$p, ff$dff, ff$rscale,
+              ff$f_m, ff$model,
+              ff$k_d, ff$p_d, ff$dff_d, ff$rscale_d, ff$f_m_d, ff$model_d,
+              ff$de_an_prior,
+              dat[1, 5],
+              ff$e
+            )
+          )
+        )
+
+        pc_f(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    pc_f(NULL)
+    output$plot_power_f_text <- shiny::renderUI(NULL)
+    output$plot_power_f      <- shiny::renderPlot(NULL)
+  }
+
+
+  # ===================================================
+  #           RELATIONSHIP BETWEEN BF & DATA (F)
+  # ===================================================
+  if (isTRUE(ff$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_f_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_rel_f <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_f_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
+        )
+      })
+
+      output$plot_rel_f <- shiny::renderPlot({
+
+        n <- dat[1, 5]
+
+        suppressWarnings(
+          switch(
+            ff$inter,
+
+            "1" = bf10_f(
+              ff$D, n, ff$k, ff$p, ff$dff, ff$rscale, ff$f_m, ff$model
+            ),
+
+            "2" = bf10_fe(
+              ff$D, n, ff$k, ff$p, ff$dff, ff$rscale, ff$f_m, ff$model, ff$e
+            )
+          )
+        )
+
+        rela_f(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_f(NULL)
+    output$plot_rel_f_text <- shiny::renderUI(NULL)
+    output$plot_rel_f      <- shiny::renderPlot(NULL)
+  }
+
+
 
   output$export_f <- shiny::downloadHandler(
     filename = function() {
@@ -5978,7 +6929,7 @@ shiny::observeEvent(input$runf, {
       rmarkdown::render(
         input = tempReport,output_format ="html_document",
         output_file = file,
-        params = list(ff = ff, dat = dat,pc_f=pc_f,rela_f=rela_f),  # ✅ pass to `params`
+        params = list(ff = ff, dat = dat,pc_f=pc_f(),rela_f=rela_f()),  # ✅ pass to `params`
         envir = new.env(parent = globalenv())  # environment still required
       )
     }
@@ -6026,9 +6977,24 @@ shiny::observeEvent(input$calf, {
     }
 
     # Build string with each argument on a new line
-    arg_strings <- sapply(names(args), function(nm) {
-      sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
+    arg_strings <- sapply(names(args), function(arg) {
+
+      val <- args[[arg]]
+      arg_print <- arg
+
+      ## model > prior_analysis
+      if (arg == "model") {
+        arg_print <- "prior_analysis"
+      }
+
+      ## e > ROPE
+      if (arg == "e") {
+        arg_print <- "ROPE"
+      }
+
+      sprintf("  %s = %s", arg_print, fmt_val(val))
     })
+
 
     call_string <- paste0(
       "# Function to be used in R\n",
@@ -6042,13 +7008,16 @@ shiny::observeEvent(input$calf, {
 
 
   output$BFcalf <- shiny::renderUI({
+    ROPE <- switch(ff$inter,"1" = NULL,"2" = ff$e)
+    p.value <- f.pval(ff$fval, ff$df1,ff$df2,ROPE=ROPE)
+
     # Create the LaTeX formatted strings for the table
     output$BFcalf <- shiny::renderUI({
       # Create the LaTeX formatted string with proper escaping
       table_latex <- paste0(
         "$$ \\textit{F}(", ff$df1, ",", ff$df2,
-        ") = ", round(ff$fval, 3),
-        ",\\ \\textit{BF}_{10} = ", round(BF10, 4),", \\textit{BF}_{01} =" ,round(1/BF10, 4)," $$"
+        ") = ", round(ff$fval, 3),", \\textit{p} = ",round(p.value,4) ,
+        ",\\\\ \\textit{BF}_{10} = ", round(BF10, 4),", \\textit{BF}_{01} =" ,round(1/BF10, 4)," $$"
       )
 
       shiny::tagList(
@@ -6205,12 +7174,12 @@ shiny::observeEvent(input$runp2, {
                            '\\begin{array}{l c}
       \\textbf{Probability of Compelling Evidence} & \\\\
       \\hline
-      p\\text{(BF}_{10} > ', p2$D, '\\, | \\, \\mathcal{H}_1) & ', round(table[1,1], 3), ' \\\\
-      p\\text{(BF}_{01} > ', p2$D, '\\, | \\, \\mathcal{H}_0) & ', round(table[1,3], 3), ' \\\\
+      p\\text{(BF}_{10} > ', p2$D, '\\, | \\, \\mathcal{H}_1) & ', format(round(table[1,1],3), nsmall = 3), ' \\\\
+      p\\text{(BF}_{01} > ', p2$D, '\\, | \\, \\mathcal{H}_0) & ', format(round(table[1,3],3), nsmall = 3), ' \\\\
       \\textbf{Probability of Misleading Evidence} & \\\\
       \\hline
-      p\\text{(BF}_{01} > ', p2$D, '\\, | \\, \\mathcal{H}_1) & ', round(table[1,2], 3), ' \\\\
-      p\\text{(BF}_{10} > ', p2$D, '\\, | \\, \\mathcal{H}_0) & ', round(table[1,4], 3), ' \\\\
+      p\\text{(BF}_{01} > ', p2$D, '\\, | \\, \\mathcal{H}_1) & ', format(round(table[1,2],3), nsmall = 3), ' \\\\
+      p\\text{(BF}_{10} > ', p2$D, '\\, | \\, \\mathcal{H}_0) & ', format(round(table[1,4],3), nsmall = 3), ' \\\\
       \\textbf{Required Sample Size} & \\\\
       \\hline
       \\text{N}_1 & ', table[1,5], ' \\\\
@@ -6222,48 +7191,105 @@ shiny::observeEvent(input$runp2, {
     }
   })
 
+  # Define reactive containers OUTSIDE the if blocks
+  pc_p2   <- shiny::reactiveVal(NULL)
+  rela_p2 <- shiny::reactiveVal(NULL)
 
+  # ===================================================
+  #               POWER CURVE
+  # ===================================================
 
-  # Compute power plot if needed
-  pc_p2 <- if (p2$pc) {
-    Power_p2(
-      p2$D, table[1,5], p2$a0, p2$b0, p2$a1, p2$b1, p2$a2,
-      p2$b2, table[1,6] / table[1,5], p2$model1, p2$a1d, p2$b1d, p2$dp1,
-      p2$model2, p2$a2d, p2$b2d, p2$dp2
-    )
-    grDevices::recordPlot()
-  } else NULL
+  if (isTRUE(p2$pc)) {
 
-  output$PCp2 <- shiny::renderPlot({
-    shiny::req(pc_p2)
-    pc_p2
-  })
+    if (identical(table, "Error")) {
 
-  # Compute heatmap if needed
-  rela_p2 <- if (p2$rela) heatmap_p2(dat[[2]], p2$D) else NULL
-
-  output$bfrp2 <- shiny::renderPlot({
-    shiny::req(rela_p2)
-    rela_p2
-  })
-
-  # Optional plots UI
-  output$Optional_Plots_p2 <- shiny::renderUI({
-    shiny::tagList(
-      if (!is.null(pc_p2)) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          shiny::plotOutput("PCp2")
+      output$plot_power_p2_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
         )
-      },
-      if (!is.null(rela_p2)) {
+      })
+
+      output$plot_power_p2 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_p2_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          shiny::plotOutput("bfrp2")
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_power_p2 <- shiny::renderPlot({
+
+        suppressWarnings(
+          Power_p2(
+            p2$D, table[1, 5], p2$a0, p2$b0, p2$a1, p2$b1, p2$a2,
+            p2$b2, table[1, 6] / table[1, 5], p2$model1, p2$a1d, p2$b1d, p2$dp1,
+            p2$model2, p2$a2d, p2$b2d, p2$dp2
+          )
+        )
+
+        pc_p2(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    pc_p2(NULL)
+    output$plot_power_p2_text <- shiny::renderUI(NULL)
+    output$plot_power_p2      <- shiny::renderPlot(NULL)
+  }
+
+  # ===================================================
+  #           RELATIONSHIP BETWEEN BF & DATA
+  # ===================================================
+
+  if (isTRUE(p2$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_p2_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_rel_p2 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_p2_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
+        )
+      })
+
+      output$plot_rel_p2 <- shiny::renderPlot({
+
+        # Explicitly assign and print the ggplot
+        plt <- heatmap_p2(dat[[2]], p2$D)
+        print(plt)
+
+        # Save the plot for later
+        rela_p2(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_p2(NULL)
+    output$plot_rel_p2_text <- shiny::renderUI(NULL)
+    output$plot_rel_p2      <- shiny::renderPlot(NULL)
+  }
+
 
   # Download handler
   output$export_p2 <- shiny::downloadHandler(
@@ -6276,7 +7302,7 @@ shiny::observeEvent(input$runp2, {
         input = tempReport,
         output_format = "html_document",
         output_file = file,
-        params = list(p2 = p2, dat = dat, pc_p2 = pc_p2, rela_p2 = rela_p2),
+        params = list(p2 = p2, dat = dat, pc_p2 = pc_p2(), rela_p2 = rela_p2()),
         envir = new.env(parent = globalenv())
       )
     }
@@ -6289,7 +7315,13 @@ shiny::observeEvent(input$runp2, {
 shiny::observeEvent(input$calp2, {
   p2 = input_p2()
   BF10 <- BF10_p2(p2$a0, p2$b0, p2$a1, p2$b1, p2$a2, p2$b2,p2$n1,p2$n2,p2$k1,p2$k2)
-
+  tab <- matrix(
+    c(p2$k1, p2$n1 - p2$k1,
+      p2$k2, p2$n2 - p2$k2),
+    nrow = 2,
+    byrow = TRUE
+  )
+  results <-stats::fisher.test(tab)
   output$BFp2 <- shiny::renderUI({
     # Create the LaTeX formatted strings for the table
     table_html <- paste0(
@@ -6297,6 +7329,7 @@ shiny::observeEvent(input$calp2, {
       'n_2 = ', p2$n2, ', ',
       'x_1 = ', p2$k1, ', ',
       'x_2 = ', p2$k2, ' \\\\ ',
+      '\\textit{Odd Ratio = }',round(results$estimate,4),', \\textit{p} = ',round(results$p.value,4),' \\\\ ',
       '\\textit{BF}_{10} = ', round(BF10, 4),
       ', \\textit{BF}_{01} = ', round(1/BF10, 4)
     )
@@ -6317,7 +7350,12 @@ shiny::observeEvent(input$calp2, {
         x1 = p2$k1,
         x2 = p2$k2
       )
-
+      fmt_val <- function(x) {
+        if (is.numeric(x) && length(x) == 1) return(as.character(x))
+        if (is.numeric(x) && length(x) > 1) return(paste(x, collapse = ", "))
+        if (is.character(x)) return(shQuote(x))
+        return(as.character(x))
+      }
       # Build string with each argument on a new line
       arg_strings <- sapply(names(args), function(nm) {
         sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
@@ -6402,7 +7440,7 @@ input_r <- shiny::reactive({
   model <- switch(input$modelr,
                   "1" = "d_beta",
                   "2" = "beta",
-                  "3" = "NLP")
+                  "3" = "Moment")
   k <- input$kr
   scale <- input$sr
   alpha <- input$ralpha
@@ -6413,7 +7451,7 @@ input_r <- shiny::reactive({
   model_d <- switch(input$modelrd,
                     "1" = "d_beta",
                     "2" = "beta",
-                    "3" = "NLP",
+                    "3" = "Moment",
                     "4" = "Point")
   location_d <- input$h0phod
   k_d <- input$rkd
@@ -6569,12 +7607,12 @@ shiny::observeEvent(input$runr, {
     \\begin{array}{l c}
     \\textbf{Probability of Compelling Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{10} > ', rr$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1], 3), ' \\\\
-    p\\text{(BF}_{01} > ', rr$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[3], 3), ' \\\\
+    p\\text{(BF}_{10} > ', rr$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{01} > ', rr$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[3], 3), nsmall = 3), ' \\\\
     \\textbf{Probability of Misleading Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{01} > ', rr$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[2], 3), ' \\\\
-    p\\text{(BF}_{10} > ', rr$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[4], 3), ' \\\\
+    p\\text{(BF}_{01} > ', rr$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[2], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{10} > ', rr$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[4], 3), nsmall = 3), ' \\\\
     \\textbf{Required Sample Size} & \\\\
     \\hline
     \\text{N} & ', dat[5], ' \\\\
@@ -6591,58 +7629,133 @@ shiny::observeEvent(input$runr, {
   })
 
 
+  # Define reactive containers OUTSIDE the if blocks
+  pc_r   <- shiny::reactiveVal(NULL)
+  rela_r <- shiny::reactiveVal(NULL)
 
 
-  if (rr$pc) {
-    switch(rr$interval,
-                     "1" = Power_r(rr$D,rr$k, rr$alpha, rr$beta,rr$h0,rr$hypothesis,rr$location,rr$scale,rr$dff,rr$model,
-                                   rr$k_d, rr$alpha_d, rr$beta_d,rr$location_d,rr$scale_d,rr$dff_d,rr$model_d, rr$de_an_prior,dat[1,5]),
-                     "2" = Power_re(rr$D,rr$k, rr$alpha, rr$beta,rr$h0,rr$hypothesis,rr$location,rr$scale,rr$dff,rr$model,
-                                    rr$k_d, rr$alpha_d, rr$beta_d,rr$location_d,rr$scale_d,rr$dff_d,rr$model_d, rr$de_an_prior,dat[1,5],rr$e))
+  # ===================================================
+  #                POWER CURVE (r)
+  # ===================================================
 
-    pc_r <- grDevices::recordPlot()
-  }else{
-    pc_r <-NA
+  if (isTRUE(rr$pc)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_power_r_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_power_r <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_r_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
+        )
+      })
+
+      output$plot_power_r <- shiny::renderPlot({
+
+        suppressWarnings(
+          switch(
+            rr$interval,
+
+            "1" = Power_r(
+              rr$D, rr$k, rr$alpha, rr$beta, rr$h0, rr$hypothesis,
+              rr$location, rr$scale, rr$dff, rr$model,
+              rr$k_d, rr$alpha_d, rr$beta_d, rr$location_d, rr$scale_d,
+              rr$dff_d, rr$model_d, rr$de_an_prior, dat[1, 5]
+            ),
+
+            "2" = Power_re(
+              rr$D, rr$k, rr$alpha, rr$beta, rr$h0, rr$hypothesis,
+              rr$location, rr$scale, rr$dff, rr$model,
+              rr$k_d, rr$alpha_d, rr$beta_d, rr$location_d, rr$scale_d,
+              rr$dff_d, rr$model_d, rr$de_an_prior, dat[1, 5], rr$e
+            )
+          )
+        )
+
+        pc_r(grDevices::recordPlot())
+      })
     }
 
-  if (rr$rela) {
-    switch(rr$interval,
-           "1" = r_bf10_p(rr$D,dat[1,5],rr$k,rr$alpha, rr$beta,rr$h0,
-                          rr$hypothesis,rr$location,rr$scale,rr$dff,rr$model),
-           "2" = re_bf10_p(rr$D,dat[1,5],rr$k,rr$alpha,rr$beta,rr$h0,rr$hypothesis,rr$location,rr$scale,rr$dff,rr$model,rr$e))
+  } else {
 
-
-    rela_r <- grDevices::recordPlot()
-  } else{
-    rela_r <- NA
+    pc_r(NULL)
+    output$plot_power_r_text <- shiny::renderUI(NULL)
+    output$plot_power_r      <- shiny::renderPlot(NULL)
   }
 
 
 
-  output$Optional_Plots_r <- shiny::renderUI({
-    shiny::tagList(
-      if (rr$pc) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          output$PCr <- shiny::renderPlot({
 
-            pc_r
+  # ===================================================
+  #                RELATIONSHIP (r)
+  # ===================================================
 
-          })
+  if (isTRUE(rr$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_r_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
         )
-      },
-      if (rr$rela) {
+      })
+
+      output$plot_rel_r <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_r_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          output$bfrr <- shiny::renderPlot({
-
-            rela_r
-
-          })
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_rel_r <- shiny::renderPlot({
+
+        n <- dat[1, 5]
+
+        suppressWarnings(
+          switch(
+            rr$interval,
+
+            "1" = r_bf10_p(
+              rr$D, n, rr$k, rr$alpha, rr$beta, rr$h0,
+              rr$hypothesis, rr$location, rr$scale, rr$dff, rr$model
+            ),
+
+            "2" = re_bf10_p(
+              rr$D, n, rr$k, rr$alpha, rr$beta, rr$h0,
+              rr$hypothesis, rr$location, rr$scale, rr$dff, rr$model, rr$e
+            )
+          )
+        )
+
+        rela_r(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_r(NULL)
+    output$plot_rel_r_text <- shiny::renderUI(NULL)
+    output$plot_rel_r      <- shiny::renderPlot(NULL)
+  }
 
 
   output$export_r <- shiny::downloadHandler(
@@ -6658,7 +7771,7 @@ shiny::observeEvent(input$runr, {
       rmarkdown::render(
         input = tempReport,output_format ="html_document",
         output_file = file,
-        params = list(rr = rr, dat = dat,pc_r=pc_r,rela_r=rela_r),  # ✅ pass to `params`
+        params = list(rr = rr, dat = dat,pc_r=pc_r(),rela_r=rela_r()),  # ✅ pass to `params`
         envir = new.env(parent = globalenv())  # environment still required
       )
     }
@@ -6695,41 +7808,96 @@ shiny::observeEvent(input$calr, {
 
   output$result_r <- shiny::renderText({
 
-    args <- list(
-      r = rr$rval,
-      n = rr$N,
-      k = rr$k,
-      alpha = rr$alpha,
-      beta = rr$beta,
-      h0 = rr$h0,
-      hypothesis = rr$hypothesis,
-      location = rr$location,
-      scale = rr$scale,
-      dff = rr$dff,
-      model = rr$model
-    )
+    build_BF10_call <- function(rr) {
 
-    if (rr$interval != 1) {
-      args$e <- rr$e
+      fmt_val <- function(x) {
+        if (is.numeric(x) && length(x) == 1) return(as.character(x))
+        if (is.numeric(x) && length(x) > 1) return(paste(x, collapse = ", "))
+        if (is.character(x)) return(shQuote(x))
+        return(as.character(x))
+      }
+
+      args <- list(
+        r = rr$rval,
+        n = rr$N,
+        model = rr$model
+      )
+
+      # Add model-specific arguments
+      if (!is.null(rr$model)) {
+        if (rr$model == "d_beta") {
+          args$k <- rr$k
+        } else if (rr$model == "beta") {
+          args$alpha <- rr$alpha
+          args$beta  <- rr$beta
+        } else if (rr$model == "Moment") {
+          args$scale <- rr$scale
+        }
+      }
+
+      # Common arguments
+      args$h0 <- rr$h0
+      args$hypothesis <- rr$hypothesis
+
+      # Optional ROPE (only if interval != 1)
+      if (!is.null(rr$interval) && rr$interval != 1) {
+        args$e <- rr$e
+      }
+
+      # Build string with renaming & mapping rules
+      arg_strings <- sapply(names(args), function(arg) {
+
+        val <- args[[arg]]
+        arg_print <- arg
+
+        ## model > prior_analysis
+        if (arg == "model") {
+          arg_print <- "prior_analysis"
+        }
+
+        ## e > ROPE
+        if (arg == "e") {
+          arg_print <- "ROPE"
+          if (length(val) > 1) {
+            return(sprintf(
+              "  %s = c(%s)",
+              arg_print,
+              paste(fmt_val(val), collapse = ", ")
+            ))
+          }
+        }
+
+        ## hypothesis > alternative
+        if (arg == "hypothesis") {
+
+          arg_print <- "alternative"
+
+          val <- switch(val,
+                        "<"  = "less",
+                        "!=" = "two.sided",
+                        ">"  = "greater",
+                        stop("Invalid hypothesis")
+          )
+
+          val <- shQuote(val)
+        } else {
+          val <- fmt_val(val)
+        }
+
+        sprintf("  %s = %s", arg_print, val)
+      })
+
+      paste0(
+        "# Function to be used in R\n",
+        "BF10.cor(\n",
+        paste(arg_strings, collapse = ",\n"),
+        "\n)"
+      )
     }
 
-    # Build string with each argument on a new line
-    arg_strings <- sapply(names(args), function(nm) {
-      if (nm == "e" && length(args[[nm]]) > 1) {
-        sprintf("  e = c(%s)", paste(fmt_val(args[[nm]]), collapse = ", "))
-      } else {
-        sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
-      }
-    })
 
-    call_string <- paste0(
-      "# Function to be used in R\n",
-      "BF10.cor(\n",
-      paste(arg_strings, collapse = ",\n"),
-      "\n)"
-    )
 
-    call_string
+    build_BF10_call(rr)
   })
 
 
@@ -6737,9 +7905,13 @@ shiny::observeEvent(input$calr, {
 
 
   output$BFrv <- shiny::renderUI({
+
+    ROPE <- switch(rr$interval,"1" = NULL,"2" = rr$e)
+      p.value <- r.pval(rr$rval, rr$N,rr$h0, rr$hypothesis , ROPE = ROPE)
+
     # Create the LaTeX formatted strings for the table
     table_html <- paste0('
-    \\textit{r}(n = ', rr$N , ') = ',rr$rval,', \\textit{BF}_{10} = ', round(BF10, 4),", \\textit{BF}_{01} = ",round(1/BF10, 4), '
+    \\textit{r}(n = ', rr$N , ') = ',rr$rval,', \\textit{p} = ',round(p.value,4),', \\\\ \\textit{BF}_{10} = ', round(BF10, 4),", \\textit{BF}_{01} = ",round(1/BF10, 4), '
 ')
 
 
@@ -6797,7 +7969,7 @@ input_t1 <- shiny::reactive({
   model <- switch(input$modelt1,
                   "1" = "t-distribution",
                   "2" = "Normal",
-                  "3" = "NLP")
+                  "3" = "Moment")
 
   location <- input$lt1
   scale <- input$st1
@@ -6808,7 +7980,7 @@ input_t1 <- shiny::reactive({
   model_d <- switch(input$modelt1d,
                     "1" = "t-distribution",
                     "2" = "Normal",
-                    "3" = "NLP",
+                    "3" = "Moment",
                     "4" = "Point")
   location_d <- input$lt1d
 
@@ -6822,6 +7994,7 @@ input_t1 <- shiny::reactive({
   tval <- input$t1tval
   pc   <- "1" %in% input$o_plot_t1
   rela <- "2" %in% input$o_plot_t1
+
   if (mode_bf!=1){
     pc=rela=F
   }
@@ -6910,12 +8083,12 @@ shiny::observeEvent(input$runt1, {
     \\begin{array}{l c}
     \\textbf{Probability of Compelling Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{10} > ', x$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1], 3), ' \\\\
-    p\\text{(BF}_{01} > ', x$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[3], 3), ' \\\\
+    p\\text{(BF}_{10} > ', x$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{01} > ', x$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[3], 3), nsmall = 3), ' \\\\
     \\textbf{Probability of Misleading Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{01} > ', x$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[2], 3), ' \\\\
-    p\\text{(BF}_{10} > ', x$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[4], 3), ' \\\\
+    p\\text{(BF}_{01} > ', x$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[2], 3), nsmall = 3), ' \\\\
+    p\\text{(BF}_{10} > ', x$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[4], 3), nsmall = 3), ' \\\\
     \\textbf{Required Sample Size} & \\\\
     \\hline
     \\text{N} & ', dat[5], ' \\\\
@@ -6930,58 +8103,133 @@ shiny::observeEvent(input$runt1, {
       )
     )
   })
-
-  if (x$pc) {
-    suppressWarnings(switch(x$interval,
-                            "1"=
-                              Power_t1(x$D,x$model,x$location,x$scale,x$dff, x$hypothesis,
-                                       x$model_d,x$location_d,x$scale_d,x$dff_d, x$de_an_prior,dat[1,5]),
-                            "2" = Power_t1e(x$D,x$model,x$location,x$scale,x$dff, x$hypothesis,
-                                            x$model_d,x$location_d,x$scale_d,x$dff_d, x$de_an_prior,dat[1,5],x$e)))
-    pc_t1 <- grDevices::recordPlot()
-  } else pc_t1 <- NA
-
-  if (x$rela) {
-    suppressWarnings(switch(x$interval,
-                            "1"=
-                              bf10_t1(
-                                D = x$D,                  # Access 'D' explicitly
-                                df = dat[1,5],               # Access 'dff' (degrees of freedom) for 'df'
-                                target = x$target,        # Access 'target' explicitly
-                                model = x$model,          # Access 'model' explicitly
-                                location = x$location,    # Access 'location' explicitly
-                                scale = x$scale,          # Access 'scale' explicitly
-                                dff = x$dff,              # Access 'dff' explicitly again, if required
-                                hypothesis = x$hypothesis # Access 'hypothesis' explicitly
-                              ), "2"= te1_BF (x$D,dat[1,5],x$model ,x$location,x$scale,x$dff , x$hypothesis ,x$e)))
-    rela_t1 <- grDevices::recordPlot()
-  } else rela_t1 <- NA
+  # --- reactive containers should be defined OUTSIDE the if blocks ----
+  pc_t1   <- shiny::reactiveVal(NULL)
+  rela_t1 <- shiny::reactiveVal(NULL)
 
 
-  output$Optional_Plots_t1 <- shiny::renderUI({
-    shiny::tagList(
-      if (x$pc) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          output$PCt1 <- shiny::renderPlot({
+  # ===============================
+  #   POWER CURVE SECTION (pc)
+  # ===============================
 
-            pc_t1
+  if (isTRUE(x$pc)) {
+    if (identical(dat, "Error")) {
 
-          })
+      output$plot_power_t1_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
         )
-      },
-      if (x$rela) {
+      })
+
+      output$plot_power_t1 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_t1_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          output$bfrt1 <- shiny::renderPlot({
-
-            rela_t1
-
-          })
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_power_t1 <- shiny::renderPlot({
+
+        plt <- suppressWarnings(
+          switch(
+            x$interval,
+            "1" = Power_t1(
+              x$D, x$model, x$location, x$scale, x$dff, x$hypothesis,
+              x$model_d, x$location_d, x$scale_d, x$dff_d,
+              x$de_an_prior, dat[1,5]
+            ),
+            "2" = Power_t1e(
+              x$D, x$model, x$location, x$scale, x$dff, x$hypothesis,
+              x$model_d, x$location_d, x$scale_d, x$dff_d,
+              x$de_an_prior, dat[1,5], x$e
+            )
+          )
+        )
+
+        print(plt)
+        pc_t1(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    pc_t1(NULL)
+    output$plot_power_t1_text <- shiny::renderUI(NULL)
+    output$plot_power_t1      <- shiny::renderPlot(NULL)
+  }
+
+
+
+  # ===============================
+  #   RELATIONSHIP SECTION (rela)
+  # ===============================
+
+  if (isTRUE(x$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_t1_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_rel_t1 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_t1_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
+        )
+      })
+
+      output$plot_rel_t1 <- shiny::renderPlot({
+
+        plt <- suppressWarnings(
+          switch(
+            x$interval,
+            "1" =
+              bf10_t1(
+                D          = x$D,
+                df         = dat[1,5],
+                target     = x$target,
+                model      = x$model,
+                location   = x$location,
+                scale      = x$scale,
+                dff        = x$dff,
+                hypothesis = x$hypothesis
+              ),
+            "2" =
+              te1_BF(
+                x$D, dat[1,5], x$model, x$location, x$scale, x$dff,
+                x$hypothesis, x$e
+              )
+          )
+        )
+
+        rela_t1(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_t1(NULL)
+    output$plot_rel_t1_text <- shiny::renderUI(NULL)
+    output$plot_rel_t1      <- shiny::renderPlot(NULL)
+  }
+
 
   output$export_t1 <- shiny::downloadHandler(
     filename = function() {
@@ -6997,7 +8245,7 @@ shiny::observeEvent(input$runt1, {
       rmarkdown::render(
         input = tempReport,output_format ="html_document",
         output_file = file,
-        params = list(x = x, dat = dat,pc_t1=pc_t1,rela_t1=rela_t1),  # ✅ pass to `params`
+        params = list(x = x, dat = dat,pc_t1=pc_t1(),rela_t1=rela_t1()),  # ✅ pass to `params`
         envir = new.env(parent = globalenv())  # environment still required
       )
     }
@@ -7009,45 +8257,81 @@ shiny::observeEvent(input$runt1, {
 shiny::observeEvent(input$cal1, {
   x = input_t1()
 
-  output$result_t1 <- shiny::renderText({
+  output$result_t1 <- shiny::renderText({args <- list(
+    tval = x$tval,
+    df = x$N,
+    model = x$model,
+    location = x$location,
+    scale = x$scale,
+    dff = x$dff,
+    hypothesis = x$hypothesis
+  )
 
-    fmt_val <- function(val) {
-      if (is.character(val)) {
-        sprintf('"%s"', val)
-      } else if (is.numeric(val) && length(val) > 1) {
-        paste0("c(", paste(val, collapse = ","), ")")
+  if (!is.null(x$e) && x$interval != 1) {
+    args$e <- x$e
+  }
+
+  # Build string with each argument on a new line
+  arg_strings <- sapply(names(args), function(arg) {
+
+    # fmt_val defined inside sapply, same style as before
+    fmt_val <- function(x) {
+      if (is.character(x)) {
+        # Wrap character strings in quotes
+        return(shQuote(x))
+      } else if (is.numeric(x) && length(x) > 1) {
+        # Wrap numeric vectors in c(...)
+        return(paste0("c(", paste(x, collapse = ", "), ")"))
+      } else if (is.numeric(x)) {
+        return(as.character(x))
+      } else if (is.logical(x)) {
+        return(ifelse(x, "TRUE", "FALSE"))
       } else {
-        as.character(val)
+        stop("Unsupported type in fmt_val")
       }
     }
 
-    args <- list(
-      tval = x$tval,
-      df = x$N,
-      model = x$model,
-      location = x$location,
-      scale = x$scale,
-      dff = x$dff,
-      hypothesis = x$hypothesis
-    )
+    val <- args[[arg]]
+    arg_print <- arg
 
-    if (x$interval != 1) {
-      args$e <- x$e
+    ## model > prior_analysis
+    if (arg == "model") {
+      arg_print <- "prior_analysis"
     }
 
-    # Build string with each argument on a new line
-    arg_strings <- sapply(names(args), function(nm) {
-      sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
-    })
+    ## e > ROPE
+    if (arg == "e") {
+      arg_print <- "ROPE"
+    }
 
-    call_string <- paste0(
-      "# Function to be used in R\n",
-      "BF10.t.test.one_sample(\n",
-      paste(arg_strings, collapse = ",\n"),
-      "\n)"
-    )
+    ## hypothesis > alternative
+    if (arg == "hypothesis") {
+      arg_print <- "alternative"
 
-    call_string
+      val <- switch(val,
+                    "<"  = "less",
+                    "!=" = "two.sided",
+                    ">"  = "greater",
+                    stop("Invalid hypothesis")
+      )
+
+      val <- shQuote(val)
+
+    } else {
+      val <- fmt_val(val)
+    }
+
+    sprintf("  %s = %s", arg_print, val)
+  })
+
+  call_string <- paste0(
+    "# Function to be used in R\n",
+    "BF10.ttest.OneSample(\n",
+    paste(arg_strings, collapse = ",\n"),
+    "\n)"
+  )
+
+  call_string
   })
 
 
@@ -7085,14 +8369,16 @@ shiny::observeEvent(input$cal1, {
     ))
 
   })
-  BF10 <- switch(x$interval,
+  BF10 <- suppressWarnings(switch(x$interval,
                  "1" = t1_BF10(x$tval,x$N,x$model ,x$location,x$scale,x$dff , x$hypothesis ),
-                 "2" = t1e_BF10(x$tval,x$N,x$model,x$location,x$scale,x$dff , x$hypothesis,x$e ))
-
+                 "2" = t1e_BF10(x$tval,x$N,x$model,x$location,x$scale,x$dff , x$hypothesis,x$e )))
+  d.obs <- x$tval/sqrt(x$N)
+  ROPE <- switch(x$interval,"1" = NULL,"2" = x$e)
+  p.value <- t.pval(x$tval, x$N+1, n2 = NULL, x$hypothesis, ROPE = ROPE, type = "One-sample t-test")
   output$BFt1 <- shiny::renderUI({
     # Create the LaTeX formatted strings for the table
     table_html <- paste0('
-    \\textit{t}(', x$N , ') = ',x$tval,', \\textit{BF}_{10} = ', round(BF10, 4),", \\textit{BF}_{01} = ",round(1/BF10, 4), '
+    \\textit{t}(', x$N , ') = ',x$tval,', \\textit{p} = ',round(p.value,4),', \\textit{d} = ',round(d.obs,4),',\\\\ \\textit{BF}_{10} = ', round(BF10, 4),", \\textit{BF}_{01} = ",round(1/BF10, 4), '
 ')
 
 
@@ -7182,7 +8468,7 @@ input_t2 <- shiny::reactive({
   model <- switch(input$modelt2,
                   "1" = "t-distribution",
                   "2" = "Normal",
-                  "3" = "NLP")
+                  "3" = "Moment")
 
   location <- input$lt2
   scale <- input$st2
@@ -7193,7 +8479,7 @@ input_t2 <- shiny::reactive({
   model_d <- switch(input$modelt2d,
                     "1" = "t-distribution",
                     "2" = "Normal",
-                    "3" = "NLP",
+                    "3" = "Moment",
                     "4" = "Point")
   location_d <- input$lt2d
   scale_d <- input$st2d
@@ -7246,6 +8532,8 @@ input_t2 <- shiny::reactive({
 
 shiny::observeEvent(input$runt2, {
   t2 = input_t2()
+
+
   dat <- tryCatch({
     suppressWarnings(switch(t2$interval,
                             "1" = t2_Table(t2$D, t2$r, t2$target, t2$model, t2$location, t2$scale, t2$dff, t2$hypothesis,
@@ -7303,12 +8591,12 @@ shiny::observeEvent(input$runt2, {
     \\begin{array}{l c}
     \\textbf{Probability of Compelling Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{10} > ', t2$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1,1], 3), ' \\\\
-    p\\text{(BF}_{01} > ', t2$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[1,3], 3), ' \\\\
+    p\\text{(BF}_{10} > ', t2$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1,1], 3),nsmall=3), ' \\\\
+    p\\text{(BF}_{01} > ', t2$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[1,3], 3),nsmall=3), ' \\\\
     \\textbf{Probability of Misleading Evidence} & \\\\
     \\hline
-    p\\text{(BF}_{01} > ', t2$D, '\\, | \\, \\mathcal{H}_1)\\ & ', round(dat[1,2], 3), ' \\\\
-    p\\text{(BF}_{10} > ', t2$D, '\\, | \\, \\mathcal{H}_0)\\ & ', round(dat[1,4], 3), ' \\\\
+    p\\text{(BF}_{01} > ', t2$D, '\\, | \\, \\mathcal{H}_1)\\ & ', format(round(dat[1,2], 3),nsmall=3), ' \\\\
+    p\\text{(BF}_{10} > ', t2$D, '\\, | \\, \\mathcal{H}_0)\\ & ', format(round(dat[1,4], 3),nsmall=3), ' \\\\
     \\textbf{Required Sample Size} & \\\\
     \\hline
     \\text{N}_1 & ', dat[1,5], ' \\\\
@@ -7324,52 +8612,134 @@ shiny::observeEvent(input$runt2, {
       )
     )
   })
+  # Define reactive containers OUTSIDE the if blocks
+  pc_t2   <- shiny::reactiveVal(NULL)
+  rela_t2 <- shiny::reactiveVal(NULL)
 
 
-  if (t2$pc) {
-    suppressWarnings(switch(t2$interval,
-                            "1" = Power_t2(t2$D,t2$model,t2$location,t2$scale,t2$dff, t2$hypothesis,
-                                           t2$model_d,t2$location_d,t2$scale_d,t2$dff_d, t2$de_an_prior,dat[1,5],dat[1,6]/dat[1,5]),
-                            "2" = Power_t2e(t2$D,t2$model,t2$location,t2$scale,t2$dff, t2$hypothesis,
-                                            t2$model_d,t2$location_d,t2$scale_d,t2$dff_d, t2$de_an_prior,dat[1,5],dat[1,6]/dat[1,5],t2$e)))
+  # ===================================================
+  #                POWER CURVE (t2)
+  # ===================================================
 
+  if (isTRUE(t2$pc)) {
 
+    if (identical(dat, "Error")) {
 
-
-    pc_t2 <- grDevices::recordPlot()
-  } else pc_t2 <- NA
-
-  if (t2$rela) {
-    suppressWarnings(switch(t2$interval,
-                            "1"= t2_bf10(t2$D ,dat[1,5],t2$r, t2$target,t2$model ,t2$location ,t2$scale,t2$dff  , t2$hypothesis ),
-                            "2" =t2e_BF (t2$D,dat[1,5],t2$r,t2$model ,t2$location,t2$scale,t2$dff , t2$hypothesis ,t2$e) ))
-    rela_t2 <- grDevices::recordPlot()
-  } else rela_t2 <- NA
-
-  output$Optional_Plots_t2 <- shiny::renderUI({
-    shiny::tagList(
-      if (t2$pc) {
-        shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Power Curve}$$")),
-          output$PCt2 <- shiny::renderPlot({
-
-            pc_t2
-
-          })
+      output$plot_power_t2_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Power curve is not shown due to an error}$$")
         )
-      },
-      if (t2$rela) {
+      })
+
+      output$plot_power_t2 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_power_t2_text <- shiny::renderUI({
         shiny::tagList(
-          shiny::withMathJax(shiny::em("$$\\text{Relationship between BF and data}$$")),
-          output$bfrt2 <- shiny::renderPlot({
-
-            rela_t2
-
-          })
+          shiny::withMathJax(
+            shiny::em("$$\\text{Power Curve}$$")
+          )
         )
-      }
-    )
-  })
+      })
+
+      output$plot_power_t2 <- shiny::renderPlot({
+
+        plt<-suppressWarnings(
+          switch(
+            t2$interval,
+
+            "1" = Power_t2(
+              t2$D, t2$model, t2$location, t2$scale, t2$dff, t2$hypothesis,
+              t2$model_d, t2$location_d, t2$scale_d, t2$dff_d,
+              t2$de_an_prior,
+              unlist(dat[1,5]),
+              unlist(dat[1,6]) / unlist(dat[1,5])
+            ),
+
+            "2" = Power_t2e(
+              t2$D, t2$model, t2$location, t2$scale, t2$dff, t2$hypothesis,
+              t2$model_d, t2$location_d, t2$scale_d, t2$dff_d,
+              t2$de_an_prior,
+              dat[1,5],
+              dat[1,6] / dat[1,5],
+              t2$e
+            )
+          )
+        )
+        print(plt)
+        pc_t2(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    pc_t2(NULL)
+    output$plot_power_t2_text <- shiny::renderUI(NULL)
+    output$plot_power_t2      <- shiny::renderPlot(NULL)
+  }
+
+
+  # ===================================================
+  #                RELATIONSHIP (t2)
+  # ===================================================
+
+  if (isTRUE(t2$rela)) {
+
+    if (identical(dat, "Error")) {
+
+      output$plot_rel_t2_text <- shiny::renderUI({
+        shiny::withMathJax(
+          shiny::em("$$\\text{Relationship plot is not shown due to an error}$$")
+        )
+      })
+
+      output$plot_rel_t2 <- shiny::renderPlot({
+        NULL
+      })
+
+    } else {
+
+      output$plot_rel_t2_text <- shiny::renderUI({
+        shiny::tagList(
+          shiny::withMathJax(
+            shiny::em("$$\\text{Relationship between BF and data}$$")
+          )
+        )
+      })
+
+      output$plot_rel_t2 <- shiny::renderPlot({
+
+        plt<-suppressWarnings(
+          switch(
+            t2$interval,
+
+            "1" = t2_BF(
+              t2$D, dat[1, 5], t2$r, t2$target,
+              t2$model, t2$location, t2$scale, t2$dff,
+              t2$hypothesis
+            ),
+
+            "2" = t2e_BF(
+              t2$D, dat[1, 5], t2$r,
+              t2$model, t2$location, t2$scale, t2$dff,
+              t2$hypothesis, t2$e
+            )
+          )
+        )
+        print(plt)
+        rela_t2(grDevices::recordPlot())
+      })
+    }
+
+  } else {
+
+    rela_t2(NULL)
+    output$plot_rel_t2_text <- shiny::renderUI(NULL)
+    output$plot_rel_t2      <- shiny::renderPlot(NULL)
+  }
 
 
   output$export_t2 <- shiny::downloadHandler(
@@ -7385,7 +8755,7 @@ shiny::observeEvent(input$runt2, {
       rmarkdown::render(
         input = tempReport,output_format ="html_document",
         output_file = file,
-        params = list(t2 = t2, dat = dat,pc_t2=pc_t2,rela_t2=rela_t2),  # ✅ pass to `params`
+        params = list(t2 = t2, dat = dat,pc_t2=pc_t2(),rela_t2=rela_t2()),  # ✅ pass to `params`
         envir = new.env(parent = globalenv())  # environment still required
       )
     }
@@ -7448,6 +8818,19 @@ shiny::observeEvent(input$cal2, {
 
   output$result_t2 <- shiny::renderText({
 
+
+    fmt_val <- function(val) {
+      if (is.character(val)) {
+        sprintf('"%s"', val)
+      } else if (is.numeric(val) && length(val) > 1) {
+        paste0("c(", paste(val, collapse = ","), ")")
+      } else {
+        as.character(val)
+      }
+    }
+
+
+
     args <- list(
       tval = t2$tval,
       N1 = t2$N1,
@@ -7464,17 +8847,45 @@ shiny::observeEvent(input$cal2, {
     }
 
     # Build string with each argument on a new line
-    arg_strings <- sapply(names(args), function(nm) {
-      if (nm == "e" && length(args[[nm]]) > 1) {
-        sprintf("  e = c(%s)", paste(fmt_val(args[[nm]]), collapse = ", "))
-      } else {
-        sprintf("  %s = %s", nm, fmt_val(args[[nm]]))
+    arg_strings <- sapply(names(args), function(arg) {
+
+      val <- args[[arg]]
+      arg_print <- arg
+
+      ## model > prior_analysis
+      if (arg == "model") {
+        arg_print <- "prior_analysis"
       }
+
+      ## e > ROPE
+      if (arg == "e") {
+        arg_print <- "ROPE"
+      }
+
+      ## hypothesis > alternative
+      if (arg == "hypothesis") {
+
+        arg_print <- "alternative"
+
+        val <- switch(val,
+                      "<"  = "less",
+                      "!=" = "two.sided",
+                      ">"  = "greater",
+                      stop("Invalid hypothesis")
+        )
+
+        val <- shQuote(val)
+
+      } else {
+        val <- fmt_val(val)
+      }
+
+      sprintf("  %s = %s", arg_print, val)
     })
 
     call_string <- paste0(
       "# Function to be used in R\n",
-      "BF10.t.test.two_sample(\n",
+      "BF10.ttest.TwoSample(\n",
       paste(arg_strings, collapse = ",\n"),
       "\n)"
     )
@@ -7483,12 +8894,18 @@ shiny::observeEvent(input$cal2, {
   })
 
 
-
+  d.obs <-  t2$tval / sqrt((t2$N1 * t2$N2) / (t2$N1 + t2$N2))
+  ROPE <- switch(t2$interval,"1" = NULL,"2" = t2$e)
+  p.value <- t.pval(t2$tval, t2$N1, t2$N2, t2$hypothesis, ROPE = ROPE, type = "two")
   output$BFt2 <- shiny::renderUI({
     # Create the LaTeX formatted strings for the table
-    table_html <- paste0('
-    \\textit{t}(', ddff, ') = ',t2$tval,', \\textit{BF}_{10} = ', round(BF10, 4),", \\textit{BF}_{01} = " ,round(1/BF10, 4),'
-')
+    table_html <- paste0(
+      '\\textit{t}(', ddff, ') = ', t2$tval,', \\textit{p} = ',round(p.value,4),
+      ', \\textit{d} = ', round(d.obs, 4), ', \\\\ ',
+      '\\textit{BF}_{10} = ', round(BF10, 4),
+      ', \\textit{BF}_{01} = ', round(1/BF10, 4)
+    )
+
 
 
     # Render the table using MathJax
@@ -7572,7 +8989,7 @@ t2_BF10 <-function(t,n1,r,model ,location,scale,dff , hypothesis ){
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
 
   error = 1e-10
@@ -7663,7 +9080,7 @@ t2_TPE <-function(t,n1,r,model ,location ,scale,dff , hypothesis ){
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
 
 
@@ -7684,7 +9101,7 @@ t2_TPE <-function(t,n1,r,model ,location ,scale,dff , hypothesis ){
   }
 
   error = 1e-4
-  if (model == "NLP" & scale <.3 ){
+  if (model == "Moment" & scale <.3 ){
     error = 1e-14
   }
   x = stats::integrate(int,lower = bound[1],upper = bound[2], rel.tol = error,stop.on.error=FALSE)$value
@@ -7720,7 +9137,7 @@ t2_FNE<-function(t,n1,r,model ,location ,scale,dff , hypothesis ){
     switch(model,
            "Cauchy"         = stats::pcauchy(bound[2], location, scale)     - stats::pcauchy(bound[1], location, scale),
            "Normal"         = stats::pnorm (bound[2], location, scale)      - stats::pnorm (bound[1], location, scale),
-           "NLP"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
+           "Moment"            = if (bound[2] == 0) pmom(bound[2]-location, tau=scale^2) else 1-pmom(bound[1]-location, tau=scale^2),
            "t-distribution" = stats::pt((bound[2] - location) / scale, dff, 0) - stats::pt((bound[1] - location) / scale, dff, 0))
   int <- function(delta) {
     ncp <- delta * constant
@@ -7901,115 +9318,234 @@ t2_Table <- function(D,r,target,model,location,scale,dff, hypothesis,
 
 # plots for showing the relationship between BF and t-values
 
-t2_bf10 <-function(D ,n1,r, target,model ,location ,scale,dff  , hypothesis ){
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
+t2_BF <- function(D, n1, r, target,
+                  model, location, scale, dff, hypothesis) {
+
   tt <- seq(-5, 5, 0.2)
 
-  # Compute BF10 and t-bounds:
-  BF10   <- t2_BF10(tt,n1,r,model ,location,scale,dff,hypothesis)
-  t.BF10 <- t2_BF10_bound(D, n1,r,model ,location ,scale,dff , hypothesis)
-  # Left plot - BF10:
+  ## ---------- BF10 ----------
+  BF10   <- t2_BF10(tt, n1, r, model, location, scale, dff, hypothesis)
+  t.BF10 <- t2_BF10_bound(D, n1, r, model, location, scale, dff, hypothesis)
+
+  df10 <- data.frame(t = tt, BF = BF10)
+
   main.bf10 <- if (length(t.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(t.BF10, digits = 3))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10, 2))))
   } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(t.BF10[1], digits = 3))~"or"~.(format(t.BF10[2], digits = 3))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10[1], 2))~
+                  " or "~.(round(t.BF10[2], 2))))
   }
-  plot(tt, BF10, type = "l", log = "y", xlab = "t-value", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n")
-  graphics::abline(v = t.BF10)
-  graphics::axis(1, c(-5, 5))
-  if (length(t.BF10)) graphics::axis(1, round(t.BF10, 2))
 
-  # Left plot - BF01:
+  x_breaks_10 <- sort(unique(c(-5, 5, round(t.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(t, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = t.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "t-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 13, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 11),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF01 ----------
   BF01   <- 1 / BF10
-  t.BF01 <- t2_BF01_bound(D, n1,r,model ,location ,scale,dff , hypothesis)
+  t.BF01 <- t2_BF01_bound(D, n1, r, model, location, scale, dff, hypothesis)
 
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / t2_BF10 (0,n1,r,model ,location,scale,dff ,"!=")
-  impossible <- (hypothesis == "!=") && (max.BF01 < D || identical(t.BF01, "bound cannot be found"))
+  df01 <- data.frame(t = tt, BF = BF01)
 
-  plot(tt, BF01, type = "l", log = "y", xlab = "t-value", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-5, 5))
+  max.BF01   <- 1 / t2_BF10(0, n1, r, model, location, scale, dff, "!=")
+  impossible <- (hypothesis == "!=") &&
+    (max.BF01 < D || identical(t.BF01, "bound cannot be found"))
+
   if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = c(-5, 5)) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"['01'] * " (log scale)"),
+        title = bquote(bold("It is impossible to have BF"[01]~"="~.(D)))
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
+
   } else {
-    graphics::abline(v = t.BF01)
-    graphics::axis(1, round(t.BF01, 2))
+
     main.bf01 <- if (length(t.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(t.BF01, digits = 3))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01, 2))))
     } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(t.BF01[1], digits = 3))~"or"~.(format(t.BF01[2], digits = 3))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01[1], 2))~
+                    " or "~.(round(t.BF01[2], 2))))
     }
-    graphics::title(main = main.bf01)
+
+    x_breaks_01 <- sort(unique(c(-5, 5, round(t.BF01, 2))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::geom_vline(xintercept = t.BF01, linetype = "dashed") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_01) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"['01'] * " (log scale)"),
+        title = main.bf01
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
   }
 
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
-Power_t2<-function(D,model,location,scale,dff, hypothesis,
-                   model_d,location_d,scale_d,dff_d, de_an_prior,n1,r){
-  Total_ = n1 + n1*r
-  smin = 4
-  smax = Total_*1.2
-  sdf = seq(smin,smax , by = (smax-smin)/30)
-  sn1 = sdf/(1+r)
-  TPE =  array(NA, dim = c(length(sdf)))
-  FPE  =  array(NA, dim = c(length(sdf)))
-  TNE  =  array(NA, dim = c(length(sdf)))
-  FNE  =  array(NA, dim = c(length(sdf)))
-
-  for ( i in 1:length(sdf)){
-    t10 = t2_BF10_bound(D , sn1[i],r,model ,location ,scale,dff , hypothesis)
-    t01 = t2_BF01_bound(D , sn1[i],r,model ,location ,scale,dff , hypothesis)
-
-    TPE[i] = switch(as.character(de_an_prior),
-                      "1" = t2_TPE(t10,sn1[i],r,model ,location ,scale,dff , hypothesis ),
-                      "0" = t2_TPE(t10,sn1[i],r,model_d ,location_d ,scale_d,dff_d , hypothesis ))
-    FPE[i] = t2_FPE(t10,sn1[i],r, hypothesis)
-    FNE[i] = switch(as.character(de_an_prior),
-                      "1" = t2_FNE(t01,sn1[i],r,model ,location ,scale,dff , hypothesis ),
-                      "0" = t2_FNE(t01,sn1[i],r,model_d ,location_d ,scale_d,dff_d , hypothesis ))
-    TNE[i] = t2_TNE(t01,sn1[i],r, hypothesis)
 
 
+Power_t2 <- function(D, model, location, scale, dff, hypothesis,
+                            model_d, location_d, scale_d, dff_d,
+                            de_an_prior, n1, r) {
+
+  Total_ <- n1 + n1 * r
+  smin <- 4
+  smax <- Total_ * 1.2
+  sdf  <- seq(smin, smax, length.out = 31)
+  sn1  <- sdf / (1 + r)
+
+  # Initialize vectors
+  TPE <- FPE <- TNE <- FNE <- numeric(length(sdf))
+
+  for (i in seq_along(sdf)) {
+
+    t10 <- t2_BF10_bound(D, sn1[i], r, model, location, scale, dff, hypothesis)
+    t01 <- t2_BF01_bound(D, sn1[i], r, model, location, scale, dff, hypothesis)
+
+    TPE[i] <- if (de_an_prior == 1) {
+      t2_TPE(t10, sn1[i], r, model, location, scale, dff, hypothesis)
+    } else {
+      t2_TPE(t10, sn1[i], r, model_d, location_d, scale_d, dff_d, hypothesis)
+    }
+
+    FPE[i] <- t2_FPE(t10, sn1[i], r, hypothesis)
+
+    FNE[i] <- if (de_an_prior == 1) {
+      t2_FNE(t01, sn1[i], r, model, location, scale, dff, hypothesis)
+    } else {
+      t2_FNE(t01, sn1[i], r, model_d, location_d, scale_d, dff_d, hypothesis)
+    }
+
+    TNE[i] <- t2_TNE(t01, sn1[i], r, hypothesis)
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(sdf, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(sdf,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-  plot(sdf, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(sdf,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  ## ---------- Data for ggplot ----------
 
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Positive`  = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
+
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Negative`  = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
+
+  ## ---------- Styling ----------
+
+  type_colors <- c(
+    "True Positive"  = "black",
+    "False Positive" = "grey50",
+    "True Negative"  = "black",
+    "False Negative" = "grey50"
+  )
+
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x  = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y  = ggplot2::element_text(size = 12),
+      plot.title   = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  ## ---------- Plots ----------
+
+  p1 <- ggplot2::ggplot(df1,
+                        ggplot2::aes(x = SampleSize,
+                                     y = Probability,
+                                     color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  p2 <- ggplot2::ggplot(df2,
+                        ggplot2::aes(x = SampleSize,
+                                     y = Probability,
+                                     color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  ## ---------- Combine ----------
+
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
 
@@ -8417,111 +9953,225 @@ t2e_table<-function(D,r,target,model,location,scale,dff, hypothesis,e ,
   table
 }
 
-t2e_BF <-function(D,n1,r,model ,location,scale,dff , hypothesis ,e){
+t2e_BF <- function(D, n1, r,
+                   model, location, scale, dff, hypothesis, e) {
+
   tt <- seq(-5, 5, 0.2)
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  # Compute BF10 and t-bounds:
-  BF10   <- t2e_BF10(tt, n1,r,model,location,scale,dff , hypothesis,e)
-  t.BF10 <- t2e_BF10_bound(D, n1,r,model,location,scale,dff , hypothesis,e)
 
-  # Left plot - BF10:
+  ## ---------- BF10 ----------
+  BF10   <- t2e_BF10(tt, n1, r, model, location, scale, dff, hypothesis, e)
+  t.BF10 <- t2e_BF10_bound(D, n1, r, model, location, scale, dff, hypothesis, e)
+
+  df10 <- data.frame(t = tt, BF = BF10)
+
   main.bf10 <- if (length(t.BF10) == 1) {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(t.BF10, digits = 3))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10, 2))))
   } else {
-    bquote(bold("BF"[10]~"="~.(D)~"when t = "~.(format(t.BF10[1], digits = 3))~"or"~.(format(t.BF10[2], digits = 3))))
+    bquote(bold("BF"[10]~"="~.(D)~" when t = "~.(round(t.BF10[1], 2))~
+                  " or "~.(round(t.BF10[2], 2))))
   }
-  plot(tt, BF10, type = "l", log = "y", xlab = "t-value", ylab = expression("BF"[10]* " (log scale)"),
-       main = main.bf10, frame.plot = FALSE, xaxt = "n",xlim = c(-5,5))
-  graphics::abline(v = t.BF10)
-  graphics::axis(1, c(-5, 5))
-  if (length(t.BF10)) graphics::axis(1, round(t.BF10, 2))
 
-  # right plot - BF01:
+  x_breaks_10 <- sort(unique(c(-5, 5, round(t.BF10, 2))))
+
+  p1 <- ggplot2::ggplot(df10, ggplot2::aes(t, BF)) +
+    ggplot2::geom_line(linewidth = 1.2, color = "black") +
+    ggplot2::geom_vline(xintercept = t.BF10, linetype = "dashed") +
+    ggplot2::scale_y_log10() +
+    ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_10) +
+    ggplot2::labs(
+      x = "t-value",
+      y = expression("BF"[10] * " (log scale)"),
+      title = main.bf10
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title = ggplot2::element_text(size = 13, face = "bold"),
+      axis.text  = ggplot2::element_text(size = 11),
+      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  ## ---------- BF01 ----------
   BF01   <- 1 / BF10
-  t.BF01 <- t2e_BF01_bound(D, n1,r,model,location,scale,dff , hypothesis,e)
-  # Check if BF01 = D is possible:
-  max.BF01   <- 1 / t2e_BF10i(0,n1,r,model,location ,scale,dff , hypothesis,e )
+  t.BF01 <- t2e_BF01_bound(D, n1, r, model, location, scale, dff, hypothesis, e)
+
+  df01 <- data.frame(t = tt, BF = BF01)
+
+  max.BF01   <- 1 / t2e_BF10i(0, n1, r, model, location, scale, dff, hypothesis, e)
   impossible <- (max.BF01 < D || identical(t.BF01, "bound cannot be found"))
 
-  plot(tt, BF01, type = "l", log = "y", xlab = "t-value", ylab = bquote("BF"['01']* " (log scale)"),
-       main = "", frame.plot = FALSE, xaxt = "n")
-  graphics::axis(1, c(-5, 5))
   if (impossible) {
-    graphics::title(main = bquote(bold("It is impossible to have BF"[01]~"="~.(D))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = c(-5, 5)) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"['01'] * " (log scale)"),
+        title = bquote(bold("It is impossible to have BF"[01]~"="~.(D)))
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
+
   } else {
-    graphics::abline(v = t.BF01)
-    graphics::axis(1, round(t.BF01, 2))
+
     main.bf01 <- if (length(t.BF01) == 1) {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(t.BF01, digits = 3))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01, 2))))
     } else {
-      bquote(bold("BF"['01']~"="~.(D)~"when t = "~.(format(t.BF01[1], digits = 3))~"or"~.(format(t.BF01[2], digits = 3))))
+      bquote(bold("BF"[0][1]~"="~.(D)~" when t = "~.(round(t.BF01[1], 2))~
+                    " or "~.(round(t.BF01[2], 2))))
     }
-    graphics::title(main = main.bf01)
+
+    x_breaks_01 <- sort(unique(c(-5, 5, round(t.BF01, 2))))
+
+    p2 <- ggplot2::ggplot(df01, ggplot2::aes(t, BF)) +
+      ggplot2::geom_line(linewidth = 1.2, color = "black") +
+      ggplot2::geom_vline(xintercept = t.BF01, linetype = "dashed") +
+      ggplot2::scale_y_log10() +
+      ggplot2::scale_x_continuous(limits = c(-5, 5), breaks = x_breaks_01) +
+      ggplot2::labs(
+        x = "t-value",
+        y = bquote("BF"['01'] * " (log scale)"),
+        title = main.bf01
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        panel.grid = ggplot2::element_blank(),
+        axis.title = ggplot2::element_text(size = 13, face = "bold"),
+        axis.text  = ggplot2::element_text(size = 11),
+        plot.title = ggplot2::element_text(hjust = 0.5, face = "bold")
+      )
   }
 
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
 
 
-Power_t2e<-function(D,model,location,scale,dff, hypothesis,
-                    model_d,location_d,scale_d,dff_d, de_an_prior,n1,r,e){
-  Total_ = n1 + n1*r
-  smin = 4
-  smax = Total_*1.2
-  sdf = seq(smin,smax , by = (smax-smin)/30)
-  sn1 = sdf/(1+r)
-  TPE =  array(NA, dim = c(length(sdf)))
-  FPE  =  array(NA, dim = c(length(sdf)))
-  TNE  =  array(NA, dim = c(length(sdf)))
-  FNE  =  array(NA, dim = c(length(sdf)))
 
-  for ( i in 1:length(sdf)){
-    t10 = t2e_BF10_bound(D, sn1[i],r,model,location,scale,dff , hypothesis,e)
-    t01 = t2e_BF01_bound(D, sn1[i],r,model,location,scale,dff , hypothesis,e)
-    TPE[i] = switch(as.character(de_an_prior),
-                    "1" = t2e_TPE(t10,sn1[i],r,model ,location,scale,dff , hypothesis ,e),
-                    "0" = t2e_TPE(t10,sn1[i],r,model_d,location_d,scale_d,dff_d , hypothesis ,e))
-    FPE[i] = t2e_FPE(t10,sn1[i],r,model,location ,scale,dff , hypothesis ,e)
-    TNE[i] = t2e_TNE(t01,sn1[i],r,model ,location,scale,dff , hypothesis ,e)
-    FNE[i] = switch(as.character(de_an_prior),
-                    "1" = t2e_FNE(t01,sn1[i],r,model ,location,scale,dff , hypothesis ,e),
-                    "0" = t2e_FNE(t01,sn1[i],r,model_d ,location_d,scale_d,dff_d , hypothesis ,e))
 
+Power_t2e <- function(D, model, location, scale, dff, hypothesis,
+                      model_d, location_d, scale_d, dff_d,
+                      de_an_prior, n1, r, e) {
+
+  Total_ <- n1 + n1 * r
+  smin   <- 4
+  smax   <- Total_ * 1.2
+  sdf    <- seq(smin, smax, length.out = 31)
+  sn1    <- sdf / (1 + r)
+
+  TPE <- FPE <- TNE <- FNE <- numeric(length(sdf))
+
+  for (i in seq_along(sdf)) {
+
+    t10 <- t2e_BF10_bound(D, sn1[i], r, model, location, scale, dff, hypothesis, e)
+    t01 <- t2e_BF01_bound(D, sn1[i], r, model, location, scale, dff, hypothesis, e)
+
+    TPE[i] <- if (de_an_prior == 1) {
+      t2e_TPE(t10, sn1[i], r, model, location, scale, dff, hypothesis, e)
+    } else {
+      t2e_TPE(t10, sn1[i], r, model_d, location_d, scale_d, dff_d, hypothesis, e)
+    }
+
+    FPE[i] <- t2e_FPE(t10, sn1[i], r, model, location, scale, dff, hypothesis, e)
+    TNE[i] <- t2e_TNE(t01, sn1[i], r, model, location, scale, dff, hypothesis, e)
+
+    FNE[i] <- if (de_an_prior == 1) {
+      t2e_FNE(t01, sn1[i], r, model, location, scale, dff, hypothesis, e)
+    } else {
+      t2e_FNE(t01, sn1[i], r, model_d, location_d, scale_d, dff_d, hypothesis, e)
+    }
   }
-  oldpar <- graphics::par(no.readonly = TRUE)
-  base::on.exit(graphics::par(oldpar))
-  graphics::par(mfrow = c(1, 2))
-  plot(sdf, TPE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[10]~">"~.(D))))
-  graphics::lines(sdf,FPE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True positive", "False positive"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
 
-  plot(sdf, TNE, type = "l",
-       xlab = "Total sample size",
-       ylab = "probability",
-       ylim = c(0, 1), frame.plot = FALSE,
-       main = bquote(bold("Power curve for BF"[0][1]~">"~.(D))))
-  graphics::lines(sdf,FNE,col = "grey")
-  graphics::legend(x = smax*-.1,y=1.1,
-                   legend = c("True negative", "False negative"),
-                   col = c("black", "grey"),
-                   lty = 1,
-                   bty = "n",        # no box around legend
-                   seg.len = .8,    # shorter line segment
-                   x.intersp = 0.3,  # closer text to line
-                   y.intersp = 0.4,
-                   inset = c(0.01, 0.01))  # push legend toward margin
+  ## ---------- Data frames ----------
+  df1 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Positive`  = TPE,
+      `False Positive` = FPE,
+      check.names = FALSE
+    ),
+    cols = c(`True Positive`, `False Positive`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df1$Type <- factor(df1$Type, levels = c("True Positive", "False Positive"))
 
+  df2 <- tidyr::pivot_longer(
+    data = data.frame(
+      SampleSize = sdf,
+      `True Negative`  = TNE,
+      `False Negative` = FNE,
+      check.names = FALSE
+    ),
+    cols = c(`True Negative`, `False Negative`),
+    names_to = "Type",
+    values_to = "Probability"
+  )
+  df2$Type <- factor(df2$Type, levels = c("True Negative", "False Negative"))
+
+  ## ---------- Colors ----------
+  type_colors <- c(
+    "True Positive"  = "black",
+    "False Positive" = "grey50",
+    "True Negative"  = "black",
+    "False Negative" = "grey50"
+  )
+
+  ## ---------- Themes ----------
+  clean_theme <- ggplot2::theme_minimal() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_text(size = 14, face = "bold"),
+      axis.title.y = ggplot2::element_text(size = 14, face = "bold"),
+      axis.text.x  = ggplot2::element_text(size = 12, face = "bold"),
+      axis.text.y  = ggplot2::element_text(size = 12),
+      plot.title   = ggplot2::element_text(hjust = 0.5, face = "bold")
+    )
+
+  legend_theme <- ggplot2::theme(
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.background = ggplot2::element_blank(),
+    legend.key = ggplot2::element_blank(),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 12)
+  )
+
+  ## ---------- BF10 plot ----------
+  p1 <- ggplot2::ggplot(df1,
+                        ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[10]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  ## ---------- BF01 plot ----------
+  p2 <- ggplot2::ggplot(df2,
+                        ggplot2::aes(x = SampleSize, y = Probability, color = Type)) +
+    ggplot2::geom_line(linewidth = 1.2) +
+    ggplot2::scale_color_manual(values = type_colors) +
+    ggplot2::ylim(0, 1) +
+    ggplot2::labs(
+      x = "Total sample size",
+      y = "Probability",
+      title = bquote(bold("Power curve for BF"[0][1]~">"~.(D)))
+    ) +
+    clean_theme +
+    legend_theme
+
+  ## ---------- Combine ----------
+  print(patchwork::wrap_plots(p1, p2, ncol = 2))
 }
+

@@ -1,7 +1,7 @@
 ---
 title: "BayesPower: Output"
 output:
-  pdf_document: default
+  html_document: default
 fontsize: 12pt
 params:
   rr: NA
@@ -12,7 +12,16 @@ geometry: margin=2cm
 classoption: a4paper
 ---
 
-A Bayes Factor design analysis for testing correlation was conducted on `r Sys.time()`.
+A Bayes Factor design analysis for testing correlation was conducted on `r Sys.time()`.The code for reproducing the results:
+```{r, echo=FALSE, results='asis'}
+# Generate the reproducible code
+
+cat("```r\n")
+cat(BayesPower:::show_cor_code(params$rr))
+cat("\n```")
+
+
+```
 
 **Hypothesis**
 
@@ -152,22 +161,31 @@ if (isTRUE(params$rr$pc) || isTRUE(params$rr$rela)) {
 }
 ```
 
-
 ```{r results='asis', echo=FALSE,fig.width= 12, fig.height= 8}
 
 if (params$rr$pc){
   cat("**Power Curve **\n\n")
-params$pc_r
+  }
+
+```
+```{r results='asis', echo=FALSE,fig.width= 12, fig.height= 8}
+
+if (params$rr$pc){
+print(params$pc_r)
   }
 
 ```
 
 
-
 ```{r results='asis', echo=FALSE,  fig.width= 12, fig.height= 8}
 if (params$rr$rela){
 cat("**Relationship between BF and data**\n\n")
-params$rela_r
+}
+
+```
+```{r results='asis', echo=FALSE,  fig.width= 12, fig.height= 8}
+if (params$rr$rela){
+print(params$rela_r)
 }
 
 ```
