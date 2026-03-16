@@ -6,17 +6,17 @@
 #' analysis and design priors.
 #'
 #' @param alternative Character. The direction of the alternative hypothesis : two-sided (\code{"two.sided"} ), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
-#' @param ROPE Optional numeric vector. Bounds for an interval null hypothesis.
-#'   - For \code{hypothesis = "two.sided"}, must be a numeric vector of length 2 with distinct finite values.
-#'   - For \code{"greater"}, must be a single numeric scalar > 0.
-#'   - For \code{"less"}, must be a single numeric scalar < 0.
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @param prior_analysis Character. The analysis prior under the alternative hypothesis:
 #'   \code{"Normal"}, \code{"Moment"} (normal-moment prior), or \code{"t-distribution"}.
 #' @param location Numeric scaler. Location parameter for the analysis prior under the alternative hypothesis.
 #' @param scale Numeric scaler. Scale parameter for the analysis prior under the alternative hypothesis (must be > 0).
 #' @param dff Numeric scaler. Degrees of freedom for the analysis prior under the alternative hypothesis (required if \code{prior_analysis = "t-distribution"}).
-#' @param prior_design Optional character. The design prior under the alternative hypothesis:
-#'   \code{"Normal"}, \code{"Moment"}, \code{"t-distribution"}, or \code{"Point"}.
+#' @param prior_design Optional Character. The design prior under the alternative hypothesis:
+#'   \code{"Normal"}, \code{"Moment"} (normal-moment prior), \code{"t-distribution"}, or \code{"Point"}.
 #' @param location_d Numeric scaler. Location parameter for the design prior under the alternative hypothesis.
 #' @param scale_d Numeric scaler. Scale parameter for the design prior under the alternative hypothesis.
 #' @param dff_d Numeric scaler. Degrees of freedom for the design prior under the alternative hypothesis (required if \code{prior_design = "t-distribution"}).
@@ -25,21 +25,17 @@
 #' @param true_rate Numeric scaler. Target true positive or negative rate (between 0.6 and 0.999).
 #' @param false_rate Numeric scaler. Target false positive or false negative rate (between 0.001 and 0.1).
 #' @param threshold Numeric scaler. Threshold of compelling evidence (must be > 1).
-#' @param plot_power Logical. If \code{TRUE}, plots power curve.
-#' @param plot_rel Logical. If \code{TRUE}, plots the relationship between the BF and data.
 #'
-#' @return An object of class \code{BFpower_t} (a list) containing:
-#' \describe{
-#'   \item{type}{Character, always "One-sample t-test".}
-#'   \item{alternative}{Character, the direction of the alternative hypothesis.}
-#'   \item{ROPE}{Optional numeric vector for interval null bounds.}
-#'   \item{analysis_h1}{List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.}
-#'   \item{design_h1}{List with the design prior parameters: \code{prior_design}, \code{location}, \code{scale}, and optionally \code{dff} (or \code{NULL} if not provided).}
-#'   \item{results}{Data frame of probabilities: compelling/misleading evidence, or \code{NaN} if calculation fails.}
-#'   \item{threshold}{Numeric, threshold of compelling evidence.}
-#'   \item{plot_power}{Logical, whether to plot the power curve.}
-#'   \item{plot_rel}{Logical, whether the relationship between the BF and t-value is plotted.}
-#' }
+#' @return An object of class \code{BFpower_t} containing:
+#'   \itemize{
+#'     \item \code{type}: Character, always "One-sample t-test".
+#'     \item \code{alternative}: Character, the direction of the alternative hypothesis.
+#'     \item \code{ROPE}: Optional numeric vector for interval null bounds.
+#'     \item \code{analysis_h1}: List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.
+#'     \item \code{design_h1}: List with the design prior parameters: \code{prior_design}, \code{location}, \code{scale}, and optionally \code{dff} (or \code{NULL} if not provided).
+#'     \item \code{results}: Data frame of probabilities: compelling/misleading evidence, or \code{NaN} if calculation fails.
+#'     \item \code{threshold}: Numeric, threshold of compelling evidence.
+#'   }
 #' @details
 #' \strong{1. Sample size determination mode (when \code{N = NULL}):}
 #'
@@ -87,16 +83,12 @@
 #' }
 #'
 #'
-#' \strong{interval null Hypothesis:}
+#' \strong{Interval Null Hypothesis:}
 #'
 #' The argument \code{ROPE} specifies the bounds of an interval null hypothesis.
 #' If \code{ROPE} is provided, the function evaluates the Bayes factor for an interval
 #' null hypothesis. For a point-null hypothesis, \code{ROPE} should be left as \code{NULL}.
 #'
-#' \strong{Plotting:}
-#'
-#' If \code{plot_power = TRUE}, the function plots the probability of compelling
-#' evidence as a function of sample size. If \code{plot_rel = TRUE}, the relationship betwwen the BF and data is plotted.
 #' @examples
 #'BFpower.ttest.OneSample(
 #'  alternative = "two.sided",
@@ -114,8 +106,7 @@ BFpower.ttest.OneSample <- function(
     prior_analysis, location, scale, dff,
     prior_design=NULL, location_d, scale_d, dff_d,
     N=NULL,
-    type_rate = "positive", true_rate, false_rate , threshold, plot_power = FALSE,plot_rel=FALSE
-)  {
+    type_rate = "positive", true_rate, false_rate , threshold)  {
   # mode
   if ( is.null(N)) mode_bf=1 else mode_bf = 0
 
@@ -123,7 +114,7 @@ BFpower.ttest.OneSample <- function(
   if (mode_bf == 0) {
     # Check that N is a positive numeric scalar
     if (!is.numeric(N) || length(N) != 1 || !is.finite(N) || N <= 0) {
-      stop("Argument [N] sample size must be a positive numeric scalar when mode_bf = 0")
+      stop("Argument [N] sample size must be a positive numeric integer ")
     }
   }else {N=2}
 
@@ -132,11 +123,7 @@ BFpower.ttest.OneSample <- function(
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
+
 
 
   # Equivlance test or not
@@ -144,25 +131,25 @@ BFpower.ttest.OneSample <- function(
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both positive
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
-        stop("For alternative '!=', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
+        stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
       }
 
     }
 
-    if (alternative == ">") {
+    if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
-        stop("For alternative '>', Argument [ROPE] must be a numeric scalar > 0")
+        stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
       }
     }
 
-    if (alternative == "<") {
+    if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
-        stop("For alternative '<', Argument [ROPE] must be a numeric scalar < 0")
+        stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
       }
     }
 
@@ -218,7 +205,9 @@ BFpower.ttest.OneSample <- function(
     } else {
       dff_d <- 0
     }
-
+    if (prior_design == "Point") {
+      scale_d <- 0
+    }
   } else {
     de_an_prior <- 1
   }
@@ -230,26 +219,20 @@ BFpower.ttest.OneSample <- function(
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [type_rate] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
     if (!is.numeric(true_rate) || length(true_rate) != 1 ||
         !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999){
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
     if (!is.numeric(false_rate) || length(false_rate) != 1 || !is.finite(false_rate) ||
         false_rate <= 0.001 || false_rate >= 0.1) {
       stop("Argument [false_rate] (targeted false positive or false negative rate) must be a numeric scalar strictly greater than 0.001 and smaller than 0.1")
     }
 
-    alpha = false_rate
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=alpha=0
+    true_rate=false_rate=0
   }
   ####
 
@@ -258,11 +241,11 @@ BFpower.ttest.OneSample <- function(
   tryCatch(
     {
       if (interval == 1) {
-        results = suppressWarnings(t1_Table(threshold, target, prior_analysis, location, scale, dff, alternative,
-                                            prior_design, location_d, scale_d, dff_d, de_an_prior, N, mode_bf, alpha, direct))
+        results = suppressWarnings(t1_Table(threshold, true_rate, prior_analysis, location, scale, dff, alternative,
+                                            prior_design, location_d, scale_d, dff_d, de_an_prior, N, mode_bf, false_rate, type_rate))
       } else {
-        results = suppressWarnings(t1e_table(threshold,target,prior_analysis,location,scale,dff, alternative,ROPE ,
-                                             prior_design,scale_d,dff_d, de_an_prior,N,mode_bf,location_d ,alpha,direct ))
+        results = suppressWarnings(t1e_table(threshold,true_rate,prior_analysis,location,scale,dff, alternative,ROPE ,
+                                             prior_design,scale_d,dff_d, de_an_prior,N,mode_bf,location_d ,false_rate,type_rate ))
       }
 
     },
@@ -315,12 +298,10 @@ BFpower.ttest.OneSample <- function(
     design_h1 = design_h1,
     results = results,
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_t"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 }
 #' Sample Size Determination for the Two-Sample Bayesian t-Test
@@ -332,20 +313,20 @@ BFpower.ttest.OneSample <- function(
 #'
 #' @param alternative Character. The direction of the alternative hypothesis: two-sided (\code{"two.sided"}),
 #'   right-sided (\code{"greater"}), or left-sided (\code{"less"}).
-#' @param ROPE Optional numeric. Bounds for an interval null:
-#'   - For \code{hypothesis = "two.sided"}, must be a numeric vector of length 2 with distinct finite values.
-#'   - For \code{"greater"}, must be a single numeric scalar > 0.
-#'   - For \code{"less"}, must be a single numeric scalar < 0.
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @param threshold Numeric scalar. Threshold for compelling evidence (must be > 1).
 #' @param true_rate Numeric scalar. Target true positive or negative rate .
 #' @param false_rate Numeric scalar. Target false positive or negative rate .
 #' @param prior_analysis Character. Analysis prior under the alternative hypothesis:
-#'   \code{"Normal"}, \code{"Moment"}, or \code{"t-distribution"}.
+#'   \code{"Normal"}, \code{"Moment"} (normal-moment prior), or \code{"t-distribution"}.
 #' @param location Numeric scalar. Location parameter for the analysis prior.
 #' @param scale Numeric scalar > 0. Scale parameter for the analysis prior.
 #' @param dff Numeric scalar. Degrees of freedom for the analysis prior (required if prior_analysis = \code{"t-distribution"}; ignored otherwise).
-#' @param prior_design Optional character. Design prior under the alternative:
-#'   \code{"Normal"}, \code{"Moment"}, \code{"t-distribution"}, or \code{"Point"}.
+#' @param prior_design Optional Character. Design prior under the alternative:
+#'   \code{"Normal"}, \code{"Moment"}(normal-moment prior), \code{"t-distribution"}, or \code{"Point"}.
 #' @param location_d Numeric scalar. Location parameter for the design prior.
 #' @param scale_d Numeric scalar > 0. Scale parameter for the design prior.
 #' @param dff_d Numeric scalar. Degrees of freedom for the design prior (required if \code{prior_design = "t-distribution"}; ignored otherwise).
@@ -354,8 +335,6 @@ BFpower.ttest.OneSample <- function(
 #' @param r Optional numeric scalar. Ratio of sample size \code{N2 / N1} (used if \code{N1} and \code{N2} are NULL).
 #' @param type_rate Character, either \code{"positive"} or \code{"negative"}; determines whether to control
 #'   true/false positive or true/false negative rates .
-#' @param plot_power Logical. If \code{TRUE}, a plot of the power or probability of compelling evidence is generated.
-#' @param plot_rel Logical. Whether the relationship between the BF and data is plotted..
 #'
 #' @details
 #' \strong{1. Sample size determination mode (when \code{N1 = NULL} and \code{N2 = NULL}, but \code{r} is provided):}
@@ -401,29 +380,22 @@ BFpower.ttest.OneSample <- function(
 #'   \item \code{dff_d} - degrees of freedom for \code{"t-distribution"} design priors.
 #' }
 #'
-#' \strong{interval null Hypothesis:}
+#' \strong{Interval Null Hypothesis:}
 #'
 #' The argument \code{ROPE} specifies the bounds of an interval null hypothesis.
 #' If \code{ROPE} is provided, the function evaluates the Bayes factor for an interval
 #' null hypothesis. For a point-null hypothesis, \code{ROPE} should be left as \code{NULL}.
 #'
-#' \strong{Plotting:}
-#'
-#' If \code{plot_power = TRUE}, the function plots the probability of compelling
-#' evidence as a function of the sample sizes. If \code{plot_rel = TRUE}, the relationship between BF and data is plotted.
-#'
 #' @return An object of class \code{BFpower_t} containing:
-#' \describe{
-#'   \item{type}{Character string describing the test type.}
-#'   \item{alternative}{alternative hypothesis (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).}
-#'   \item{ROPE}{Interval bounds under the null used, if any.}
-#'   \item{analysis_h1}{List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.}
-#'   \item{design_h1}{List with the design prior parameters: \code{prior_design}, \code{location}, \code{scale}, and optionally \code{dff} (or \code{NULL} if not provided).}
-#'   \item{results}{Data frame with probabilities of compelling/misleading evidence.}
-#'   \item{threshold}{Threshold of compelling evidence.}
-#'   \item{plot_power}{Logical flag for plotting power.}
-#'   \item{plot_rel}{Logical flag for plotting the relationship between BF and t-value.}
-#' }
+#'   \itemize{
+#'     \item \code{type}: Character string describing the test type.
+#'     \item \code{alternative}: Alternative hypothesis (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).
+#'     \item \code{ROPE}: Interval bounds under the null used, if any.
+#'     \item \code{analysis_h1}: List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.
+#'     \item \code{design_h1}: List with the design prior parameters: \code{prior_design}, \code{location}, \code{scale}, and optionally \code{dff} (or \code{NULL} if not provided).
+#'     \item \code{results}: Data frame with probabilities of compelling/misleading evidence.
+#'     \item \code{threshold}: Threshold of compelling evidence.
+#'   }
 #'
 #' @examples
 #'BFpower.ttest.TwoSample(
@@ -443,7 +415,7 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
                                     threshold , true_rate , false_rate ,
                                     prior_analysis , location , scale , dff ,
                                     prior_design = NULL, location_d , scale_d , dff_d ,
-                                    N1 = NULL, N2 = NULL, r=NULL, type_rate="positive",plot_power=FALSE,plot_rel=FALSE) {
+                                    N1 = NULL, N2 = NULL, r=NULL, type_rate="positive") {
   ## ------------------------------
   ## CHECKING N1, N2, r CONSISTENCY
   ## ------------------------------
@@ -478,10 +450,10 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
     }
 
     if (!is.numeric(N1) || length(N1) != 1 || !is.finite(N1) || N1 <= 0) {
-      stop("Argument [N1] sample size for group 1 must be a positive numeric scalar")
+      stop("Argument [N1] sample size for group 1 must be a positive numeric integer")
     }
     if (!is.numeric(N2) || length(N2) != 1 || !is.finite(N2) || N2 <= 0) {
-      stop("Argument [N2] sample size for group 2 must be a positive numeric scalar")
+      stop("Argument [N2] sample size for group 2 must be a positive numeric integer")
     }
   }
 
@@ -490,36 +462,32 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
+
 
   # Equivlance test or not
   interval <- if (is.null(ROPE)) 1 else 0
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both positive
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
-        stop("For alternative '!=', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
+        stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
       }
 
     }
 
-    if (alternative == ">") {
+    if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
-        stop("For alternative '>', Argument [ROPE] must be a numeric scalar > 0")
+        stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
       }
     }
 
-    if (alternative == "<") {
+    if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
-        stop("For alternative '<', Argument [ROPE] must be a numeric scalar < 0")
+        stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
       }
     }
 
@@ -576,6 +544,14 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
       dff_d <- 0
     }
 
+
+    # fix scale_d to NULL for point design prior
+    if ( prior_design == "Point"){
+      scale_d <-0
+
+    }
+
+
   } else {
     de_an_prior <- 1
   }
@@ -586,36 +562,31 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [type_rate] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
+
     if (!is.numeric(true_rate) || length(true_rate) != 1 ||
         !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999){
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
     if (!is.numeric(false_rate) || length(false_rate) != 1 || !is.finite(false_rate) ||
         false_rate <= 0.001 || false_rate >= 0.1) {
       stop("Argument [false_rate] (targeted false positive or false negative rate) must be a numeric scalar strictly greater than 0.001 and smaller than 0.1")
     }
 
-    alpha = false_rate
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=alpha=0
+    true_rate=false_rate=0
   }
 
   tryCatch(
     suppressWarnings({
       if (interval == 1) {
-        results=t2_Table(threshold, r, target, prior_analysis, location, scale, dff, alternative,
-                         prior_design, location_d, scale_d, dff_d, de_an_prior, N1, N2, mode_bf, alpha, direct)
+        results=t2_Table(threshold, r, true_rate, prior_analysis, location, scale, dff, alternative,
+                         prior_design, location_d, scale_d, dff_d, de_an_prior, N1, N2, mode_bf, false_rate, type_rate)
       } else {
-        results=t2e_table(threshold, r, target, prior_analysis,location, scale, dff, alternative, ROPE,
-                          prior_design,location_d, scale_d, dff_d, de_an_prior, mode_bf, N1, N2, alpha, direct)
+        results=t2e_table(threshold, r, true_rate, prior_analysis,location, scale, dff, alternative, ROPE,
+                          prior_design,location_d, scale_d, dff_d, de_an_prior, mode_bf, N1, N2, false_rate, type_rate)
       }
     }),
     error = function(err) {
@@ -669,48 +640,44 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
     design_h1 = design_h1,
     results = results,
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_t"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 
 }
 
 
-#' Sample Size Determination for the Bayesian correlation test
+#' Sample Size Determination for the Bayesian Correlation Test
 #'
 #' Perform sample size determination or the probability of obtaining compelling or misleading evidence for a Bayesian correlation test.
 #' Can handle both point-null and interval-null hypothesis, and allows specifying
 #' analysis and design priors.
 #'
-#' @param alternative character. The direction of the alternative hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
+#' @param alternative Character. The direction of the alternative hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
 #' @param h0 Numeric scalar. Null rho correlation value. Must be between -0.8 and 0.8.
-#' @param ROPE Optional numeric vector or scalar specifying bounds for an interval null; used if interval Bayes factor is calculated.
-#'   - For \code{alternative = "two.sided"}, must be a numeric vector of length 2 with distinct finite values.
-#'   - For \code{alternative = "greater"}, must be a single numeric scalar > 0.
-#'   - For \code{alternative = "less"}, must be a single numeric scalar < 0.
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @param threshold Numeric scalar. Threshold of compelling evidence (numeric scalar > 1).
 #' @param true_rate Numeric scalar. Targeted true positive rate (if \code{positive = "positive"}) or true negative rate (if \code{positive = "negative"}).
 #' @param false_rate Numeric scalar. Targeted false positive rate (if \code{positive = "positive"}) or false negative rate (if \code{positive = "negative"}).
-#' @param prior_analysis character. Analysis prior under the alternative hypothesis:
-#'        default beta (\code{"d_beta"}), beta (\code{"beta"}), or normal moment (\code{"Moment"}).
+#' @param prior_analysis Character. Analysis prior under the alternative hypothesis:
+#'        default beta (\code{"d_beta"}), beta (\code{"beta"}), or normal-moment prior (\code{"Moment"}).
 #' @param k Numeric scalar. Parameter for the default beta prior (\code{"d_beta"}).
 #' @param alpha Numeric scalar. Parameter for the beta prior (\code{"beta"}).
 #' @param beta Numeric scalar. Parameter for the beta prior (\code{"beta"}).
-#' @param scale Numeric scalar. Scale parameter for the normal moment prior (\code{"Moment"}).
-#' @param prior_design character. Design prior  under the alternative hypothesis: default beta (\code{"d_beta"}), beta (\code{"beta"}), normal moment (\code{"Moment"}), or point (\code{"Point"}).
+#' @param scale Numeric scalar. Scale parameter for the normal-moment prior (\code{"Moment"}).
+#' @param prior_design Character. Design prior  under the alternative hypothesis: default beta (\code{"d_beta"}), beta (\code{"beta"}), normal-moment prior (\code{"Moment"}), or point (\code{"Point"}).
 #' @param alpha_d Numeric scalar. Parameter for the design beta prior (\code{"beta"}).
 #' @param beta_d Numeric scalar. Parameter for the design beta prior (\code{"beta"}).
 #' @param location_d Numeric scalar. Location parameter for the design point prior (\code{"Point"}).
 #' @param k_d Numeric scalar. Parameter for the design default beta prior (\code{"d_beta"}).
-#' @param scale_d Numeric scalar. Scale parameter for the design normal moment prior (\code{"Moment"}).
+#' @param scale_d Numeric scalar. Scale parameter for the design normal-moment prior (\code{"Moment"}).
 #' @param N Numeric integer. Sample size. Only required if the goal is not sample size determination, but rather to calculate the probability of obtaining compelling or misleading evidence for a given sample size.
-#' @param type_rate character. Character indicating which rate to control: \code{"positive"} (true/false positive rates) or \code{"negative"} (true/false negative rates).
-#' @param plot_power Logical; if TRUE, plots power curves.
-#' @param plot_rel Logical; if TRUE, plots the relationship between the BF and data.
+#' @param type_rate Character. Character indicating which rate to control: \code{"positive"} (true/false positive rates) or \code{"negative"} (true/false negative rates).
 #'
 #'@details
 #' \strong{1. Sample size determination mode (when \code{N = NULL}):}
@@ -752,13 +719,9 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
 #' \item \code{Point}: \code{location_d} numeric scalar.
 #' }
 #'
-#' \strong{interval null Hypothesis:}
+#' \strong{Interval Null Hypothesis:}
 #'
 #' If \code{ROPE} is provided, the function evaluates the Bayes factor for an interval null. Otherwise, a point-null hypothesis is assumed.
-#'
-#' \strong{Plotting:}
-#'
-#' If \code{plot_power = TRUE}, the function plots the probability of compelling evidence as a function of sample size. If \code{plot_rel = TRUE}, the relationship between the BF and correlation is plotted.
 #'
 #' @return A list of class \code{BFpower_r} containing:
 #' \itemize{
@@ -770,9 +733,7 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
 #'   \item \code{design_h1}: List with the design prior parameters: \code{prior_design}, \code{k}, \code{alpha}, \code{beta}, \code{scale}, and \code{location}.
 #'   \item \code{results}: Data frame with the probabilities of compelling/misleading evidence, and with the required sample size.
 #'   \item \code{threshold}: Threshold of compelling evidence.
-#'   \item \code{plot_power}: Logical, whether power curves are plotted.
-#'   \item \code{plot_rel}: Logical, whether the relationship between the BF and the correlation is plotted.
-#' }
+#'    }
 #'
 #' @examples
 #' BFpower.cor(
@@ -784,9 +745,7 @@ BFpower.ttest.TwoSample <- function(alternative , ROPE = NULL,
 #'    prior_analysis = "d_beta",
 #'    k = 1,
 #'    prior_design = "Point",
-#'    location_d = 0.3,
-#'    plot_power = TRUE,
-#'    plot_rel = TRUE
+#'    location_d = 0.3
 #'  )
 #'
 #' @export
@@ -795,7 +754,7 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
                        prior_analysis , k , alpha , beta , scale ,
                        prior_design = NULL, alpha_d , beta_d , location_d ,
                        k_d , scale_d ,
-                       N = NULL,  type_rate="positive",plot_power=FALSE,plot_rel=FALSE) {
+                       N = NULL,  type_rate="positive") {
   # mode
   # Check h0
   if (!is.numeric(h0) || length(h0) != 1 || !is.finite(h0) || h0 < -0.8 || h0 > 0.8) {
@@ -809,9 +768,9 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
 
   # sample size
   if (mode_bf == 0) {
-    # Check that N is a positive numeric scalar
+    # Check that N is a positive numeric integer
     if (!is.numeric(N) || length(N) != 1 || !is.finite(N) || N <= 0) {
-      stop("Argument [N] sample size must be a positive numeric scalar when mode_bf = 0")
+      stop("Argument [N] sample size must be a positive numeric integer")
     }
   }else {N=3}
 
@@ -821,11 +780,7 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
+
 
 
   # Equivlance test or not
@@ -833,7 +788,7 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
         stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
@@ -843,10 +798,10 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
         stop("For alternative 'two.sided', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
       }
       if ((h0 + min(ROPE)) <= -1 || (h0 + min(ROPE)) >= 1) {
-        stop("For alternative '!=', h0 + min(ROPE) must be between -1 and 1")
+        stop("For alternative 'two.sided', h0 + min(ROPE) must be between -1 and 1")
       }
 
-    } else if (alternative == ">") {
+    } else if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
         stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
@@ -855,7 +810,7 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
       if (ROPE > 0.5) stop("For alternative 'greater', ROPE must be <= 0.5")
       if ((h0 + ROPE) >= 1) stop("For alternative 'greater', h0 + ROPE must be < 1")
 
-    } else if (alternative == "<") {
+    } else if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
         stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
@@ -957,38 +912,32 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [positive] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
     if (!is.numeric(true_rate) || length(true_rate) != 1 || !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999) {
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
     if (!is.numeric(false_rate) || length(false_rate) != 1 || !is.finite(false_rate) ||
         false_rate <= 0.001 || false_rate >= 0.1) {
       stop("Argument [false_rate] (targeted false positive or false negative rate) must be a numeric scalar strictly greater than 0.001 and smaller than 0.1")
     }
 
-    FP = false_rate
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=FP=0
+    true_rate=false_rate=0
   }
 
 
   tryCatch(
     suppressWarnings({
       if ( interval == 1) {
-        results=r_table(threshold, target, prior_analysis, k, alpha, beta, h0, location, scale, dff,
+        results=r_table(threshold, true_rate, prior_analysis, k, alpha, beta, h0, location, scale, dff,
                         alternative, prior_design, location_d, k_d, alpha_d, beta_d, scale_d,
-                        dff_d, de_an_prior, N, mode_bf, FP, direct)
+                        dff_d, de_an_prior, N, mode_bf, false_rate, type_rate)
       } else {
-        results=re_table(threshold, target, prior_analysis, k, alpha, beta, h0, location, scale, dff,
+        results=re_table(threshold, true_rate, prior_analysis, k, alpha, beta, h0, location, scale, dff,
                          alternative, prior_design, location_d, k_d, alpha_d, beta_d, scale_d,
-                         dff_d, de_an_prior, N, mode_bf, FP, ROPE, direct)
+                         dff_d, de_an_prior, N, mode_bf, false_rate, ROPE, type_rate)
       }
     }),
     error = function(err) {
@@ -999,6 +948,7 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
   type = "correlation"
   analysis_h1 <- list(
     prior = prior_analysis,
+    location = h0,
     k = k,
     alpha=alpha,
     beta=beta,
@@ -1041,16 +991,14 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
     design_h1 = design_h1,
     results = results,
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_r"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 
 }
-#' Sample Size Determination for the Bayesian F-test
+#' Sample Size Determination for the Bayesian F-Test
 #'
 #' Computes required sample size or probabilities of compelling or misleading
 #' evidence for a fixed sample size.
@@ -1104,11 +1052,6 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
 #' @param ROPE Numeric vector. Numeric bounds for the interval null (only used when interval
 #'   Bayes factors are required).
 #'
-#' @param plot_power Logical. Whether to plot power curves when
-#'   sample size determination is requested.
-#'
-#' @param plot_rel Logical. Whether to plot the relationship between the BF and data.
-#'
 #' @details
 #'
 #' \strong{1. Sample size determination mode (when \code{N = NULL}):}
@@ -1141,26 +1084,25 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
 #'   \item \code{"Point"}: requires \code{f_m_d} only; \code{rscale_d} and \code{dff_d} are not used.
 #' }
 #'
-#' \strong{interval null Hypothesis:}
+#' \strong{Interval Null Hypothesis:}
 #'
 #' If \code{ROPE} is provided, the function evaluates the Bayes factor for an interval null. Otherwise, a point-null hypothesis is assumed.
 #'
-#' \strong{Plotting:}
-#'
-#' If \code{plot_power = TRUE}, the function plots the probability of compelling evidence as a function of sample size. If \code{plot_rel = TRUE}, the relationship between the Bayes factor and Cohen's \code{f} is plotted.
-#'
-#' @return A list of class \code{BFpower_f} containing:
-#' \describe{
-#'   \item{\code{type}}{Test type (always "Regression/ANOVA").}
-#'   \item{\code{k}, \code{p}}{Number of predictors in the full and reduced models.}
-#'   \item{\code{ROPE}}{Bounds for interval null (if used).}
-#'   \item{\code{analysis_h1}}{List containing the analysis prior specification, including the prior distribution, the scale \code{rscale}, f \code{f_m}, and degrees of freedom \code{dff}.}
-#'   \item{\code{design_h1}}{List containing the design prior specification, including the prior distribution, the scale \code{rscale}, f \code{f_m}, and degrees of freedom \code{dff} (or \code{NULL} if not specified).}
-#'   \item{\code{results}}{Data frame of probabilities of compelling/misleading evidence and the required or supplied sample size.}
-#'   \item{\code{threshold}}{Threshold of compelling evidence.}
-#'   \item{\code{plot_power}}{Logical; whether power curves are plotted.}
-#'   \item{\code{plot_rel}}{Logical; whether the relationship between the Bayes factor and data is plotted.}
-#' }
+#
+#' @return A list of class \code{BFpower} containing:
+#'   \itemize{
+#'     \item \code{type}: Test type (always "Regression/ANOVA").
+#'     \item \code{k}, \code{p}: Number of predictors in the full and reduced models.
+#'     \item \code{ROPE}: Bounds for interval null (if used).
+#'     \item \code{analysis_h1}: List containing the analysis prior specification, including
+#'       the prior distribution, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}.
+#'     \item \code{design_h1}: List containing the design prior specification, including
+#'       the prior distribution, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}
+#'       (or \code{NULL} if not specified).
+#'     \item \code{results}: Data frame of probabilities of compelling/misleading evidence and
+#'       the required or supplied sample size.
+#'     \item \code{threshold}: Threshold of compelling evidence.
+#'   }
 #' If sample size determination fails, the function returns \code{NaN} and prints a message.
 #'
 #' @examples
@@ -1175,15 +1117,13 @@ BFpower.cor<- function(alternative , h0, ROPE = NULL,
 #'  rscale = 0.18,
 #'  f_m = 0.1,
 #'  prior_design = "Point",
-#'  f_m_d = 0.1,
-#'  plot_power = TRUE,
-#'  plot_rel = TRUE)
+#'  f_m_d = 0.1)
 #'
 #' @export
 BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
                            prior_analysis , dff , rscale , f_m ,
                            prior_design = NULL, dff_d, rscale_d, f_m_d ,
-                           N = NULL, type_rate="positive", ROPE = NULL,plot_power=FALSE,plot_rel=FALSE) {
+                           N = NULL, type_rate="positive", ROPE = NULL) {
 
   ## mode
   if ( is.null(N)) mode_bf=1 else mode_bf = 0
@@ -1299,26 +1239,21 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [type_rate] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
+
     if (!is.numeric(true_rate) || length(true_rate) != 1 ||
         !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999){
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
     if (!is.numeric(false_rate) || length(false_rate) != 1 || !is.finite(false_rate) ||
         false_rate <= 0.001 || false_rate >= 0.1) {
       stop("Argument [false_rate] (targeted false positive or false negative rate) must be a numeric scalar strictly greater than 0.001 and smaller than 0.1")
     }
 
-    FP = false_rate
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=FP=0
+    true_rate=false_rate=0
   }
 
 
@@ -1332,22 +1267,26 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
   results = tryCatch({
     suppressWarnings({
       if (!is.null(interval) && interval == 1) {
-        f_table(threshold, target, p, k, dff, rscale, f_m, prior_analysis,
+        f_table(threshold, true_rate, p, k, dff, rscale, f_m, prior_analysis,
                 dff_d, rscale_d, f_m_d, prior_design, de_an_prior, N,
-                mode_bf, FP, direct)
+                mode_bf, false_rate, type_rate)
       } else {
-        fe_table(threshold, target, p, k, dff, rscale, f_m, prior_analysis,
+        fe_table(threshold, true_rate, p, k, dff, rscale, f_m, prior_analysis,
                  dff_d, rscale_d, f_m_d, prior_design, de_an_prior, N,
-                 mode_bf, ROPE, FP, direct)
+                 mode_bf, ROPE, false_rate, type_rate)
       }
     })
   }, error = function(err) {
 
-    if(dff<3|dff_d<3){
+    if(is.null(prior_design)&dff<3&prior_analysis == "Moment"){
       stop(" Degrees of freedom[dff] for analysis prior or [dff_d] for design prior should be at least 3")
 
     }
+    if(!is.null(prior_design)){
+    if(dff_d<3&prior_design == "Moment"){
+      stop(" Degrees of freedom[dff] for analysis prior or [dff_d] for design prior should be at least 3")
 
+    }}
     message("Required sample size > 10,000")
 
     return(NaN)
@@ -1391,16 +1330,14 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
     design_h1 = design_h1,
     results = results,
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_f"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 
 }
-#' Sample Size Determination for the Bayesian one-proportion test
+#' Sample Size Determination for the Bayesian One-Proportion Test
 #'
 #' Perform sample size determination or the calculation of compelling and misleading evidence
 #' for a Bayesian test of a single proportion.
@@ -1410,24 +1347,21 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
 #' @param h0 Numeric scalar. Null proportion value for the test (numeric scalar between 0.1 and 0.9).
 #' @param true_rate Numeric scalar. Targeted true positive rate  or true negative rate .
 #' @param false_rate Numeric scalar. Targeted false positive rate  or false negative rate .
-#' @param prior_analysis Character. Analysis prior under the alternative hypothesis: \code{"beta"} or \code{"Moment"}.
+#' @param prior_analysis Character. Analysis prior under the alternative hypothesis: \code{"beta"} or \code{"Moment"} (normal-moment prior).
 #' @param alpha Numeric scalar. Parameter for the analysis beta prior (used when \code{prior_analysis = "beta"}).
 #' @param beta Numeric scalar. Parameter for the analysis beta prior (used when \code{prior_analysis = "beta"}).
 #' @param scale Numeric scalar. Scale parameter for the analysis moment prior (used when \code{prior_analysis = "Moment"}).
-#' @param prior_design Character. Design prior under the alternative hypothesis: \code{"beta"}, \code{"Moment"}, or \code{"Point"}.
+#' @param prior_design Character. Design prior under the alternative hypothesis: \code{"beta"}, \code{"Moment"}(normal-moment prior), or \code{"Point"}.
 #' @param alpha_d Numeric scalar. Parameter for the design beta prior (used when \code{prior_design = "beta"}).
 #' @param beta_d Numeric scalar. Parameter for the design beta prior (used when \code{prior_design = "beta"}).
 #' @param location_d Numeric scalar. Proportion value for the design point prior (\code{prior_design = "Point"}). Represents the true proportion under the alternative hypothesis.
 #' @param scale_d Numeric scalar. Scale parameter for the design moment prior (used when \code{prior_design = "Moment"}).
 #' @param N Numeric integer. Sample size. If \code{NULL}, sample size determination is performed.
-#' @param ROPE Numeric vector. Numeric bounds for the interval null (used when computing interval Bayes factors).
-#'   - For \code{hypothesis = "two.sided"}, must be a numeric vector of length 2 with distinct finite values.
-#'   - For \code{"greater"}, must be a single numeric scalar > 0.
-#'   - For \code{"less"}, must be a single numeric scalar < 0.
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @param type_rate Character. Either `"positive"` (controls true/false positive rates) or `"negative"` (controls true/false negative rates).
-#' @param plot_power Logical. Whether to plot power curves when sample size determination is requested.
-#' @param plot_rel Logical. Whether to plot probability of misleading evidence.
-#'
 #' @details
 #'
 #' \strong{1. Sample size determination mode (when \code{N = NULL}):}
@@ -1461,7 +1395,7 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
 #' }
 #' If \code{prior_design} is \code{NULL}, no design prior is used.
 #'
-#' \strong{interval null Hypothesis:}
+#' \strong{Interval Null Hypothesis:}
 #'
 #' If \code{ROPE} is provided, the function evaluates the Bayes factor for an interval null. Otherwise, a point-null hypothesis is assumed.
 #'
@@ -1469,12 +1403,8 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
 #'
 #' The function supports one-sided (\code{"greater"} or \code{"less"}) and two-sided (\code{"two.sided"}) tests. Design prior and interval null bounds must be consistent with the directionality of the hypothesis.
 #'
-#' \strong{Plotting:}
 #'
-#' If \code{plot_power = TRUE}, the function plots the probability of compelling evidence as a function of sample size. If \code{plot_rel = TRUE}, the relationship between the Bayes factor and the number of successes (proportion) is plotted.
-#'
-#'
-#' @return A list of class \code{"BFpower_bin"} containing:
+#' @return A list of class \code{"BFpower"} containing:
 #' \itemize{
 #'   \item \code{type}: Test type ("One proportion").
 #'   \item \code{alternative}: alternative hypothesis.
@@ -1487,9 +1417,7 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
 #'     \code{beta} (beta parameter), and \code{scale} (scale parameter).
 #'   \item \code{results}: Data frame of probabilities of compelling/misleading evidence and the required or supplied sample size.
 #'   \item \code{threshold}: Compelling-evidence threshold.
-#'   \item \code{plot_power}: Logical, whether power curves are plotted.
-#'   \item \code{plot_rel}: Logical, whether the relationship between the BF and data is plotted.
-#' }
+#'   }
 #'
 #' If sample size determination fails, the function returns \code{NaN} and prints a message.
 #'
@@ -1502,17 +1430,14 @@ BFpower.f.test <- function(threshold, true_rate, false_rate , p , k ,
 #'   h0 = 0.5,
 #'   prior_analysis = "beta",
 #'   alpha = 1,
-#'   beta = 1,
-#'   plot_rel = TRUE,
-#'   plot_power = TRUE)
-#'
+#'   beta = 1)
 #'
 #' @export
 BFpower.bin <- function(alternative ,threshold , h0 ,
                         true_rate , false_rate ,
                         prior_analysis , alpha , beta , scale ,
                         prior_design = NULL, alpha_d , beta_d , location_d , scale_d ,
-                        N = NULL, ROPE = NULL, type_rate="positive",plot_power=FALSE,plot_rel=FALSE) {
+                        N = NULL, ROPE = NULL, type_rate="positive") {
 
   # mode
   # Check h0
@@ -1528,7 +1453,7 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
   if (mode_bf == 0) {
     # Check that N is a positive numeric scalar
     if (!is.numeric(N) || length(N) != 1 || !is.finite(N) || N <= 0) {
-      stop("Argument [N] sample size must be a positive numeric scalar when mode_bf = 0")
+      stop("Argument [N] sample size must be a positive numeric integer ")
     }
   }else {N=3}
 
@@ -1538,11 +1463,7 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
+
 
 
   # Equivlance test or not
@@ -1550,36 +1471,36 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
-        stop("For alternative '!=', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
+        stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
       }
       # Additional bounds checks
       if (min(ROPE) < -0.5 || max(ROPE) > 0.5) {
-        stop("For alternative '!=', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
+        stop("For alternative 'two.sided', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
       }
       if ((h0 + min(ROPE)) <= 0 || (h0 + min(ROPE)) >= 1) {
-        stop("For alternative '!=', h0 + min(ROPE) must be between 0 and 1")
+        stop("For alternative 'two.sided', h0 + min(ROPE) must be between 0 and 1")
       }
 
-    } else if (alternative == ">") {
+    } else if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
-        stop("For alternative '>', Argument [ROPE] must be a numeric scalar > 0")
+        stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
       }
       # Additional bounds checks
-      if (ROPE > 0.5) stop("For alternative '>', ROPE must be <= 0.5")
-      if ((h0 + ROPE) >= 1) stop("For alternative '>', h0 + ROPE must be < 1")
+      if (ROPE > 0.5) stop("For alternative 'greater', ROPE must be <= 0.5")
+      if ((h0 + ROPE) >= 1) stop("For alternative 'greater', h0 + ROPE must be < 1")
 
-    } else if (alternative == "<") {
+    } else if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
-        stop("For alternative '<', Argument [ROPE] must be a numeric scalar < 0")
+        stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
       }
       # Additional bounds checks
-      if (ROPE < -0.5) stop("For alternative '<', ROPE must be >= -0.5")
-      if ((h0 + ROPE) <= -1) stop("For alternative '<', h0 + ROPE must be > 0")
+      if (ROPE < -0.5) stop("For alternative 'less', ROPE must be >= -0.5")
+      if ((h0 + ROPE) <= -1) stop("For alternative 'less', h0 + ROPE must be > 0")
     }
 
   }
@@ -1651,15 +1572,13 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
     }
 
     # Validate location_d against alternative and h0
-    # - "!=" : location_d must not equal h0
-    # - ">"  : location_d must be greater than h0
-    # - "<"  : location_d must be less than h0
-    if (alternative == "!=" && location_d == h0) {
-      stop("For alternative '!=', Argument [location_d] true proportion must not equal h0")
-    } else if (alternative == ">" && location_d <= h0) {
-      stop("For alternative '>', Argument [location_d] true proportion must be greater than h0")
-    } else if (alternative == "<" && location_d >= h0) {
-      stop("For alternative '<', Argument [location_d] true proportion must be less than h0")
+
+    if (alternative ==  "two.sided" && location_d == h0) {
+      stop("For alternative 'two.sided', Argument [location_d] true proportion must not equal h0")
+    } else if (alternative == "greater" && location_d <= h0) {
+      stop("For alternative 'greater', Argument [location_d] true proportion must be greater than h0")
+    } else if (alternative == "less" && location_d >= h0) {
+      stop("For alternative 'less', Argument [location_d] true proportion must be less than h0")
     }
     }
 
@@ -1673,25 +1592,20 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [type_rate] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
+
     if (!is.numeric(true_rate) || length(true_rate) != 1 || !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999) {
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
     if (!is.numeric(false_rate) || length(false_rate) != 1 || !is.finite(false_rate) ||
         false_rate <= 0.001 || false_rate >= 0.1) {
       stop("Argument [false_rate] (targeted false positive or false negative rate) must be a numeric scalar strictly greater than 0.001 and smaller than 0.1")
     }
 
-    FP = false_rate
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=FP=0
+    true_rate=false_rate=0
   }
 
 
@@ -1699,13 +1613,13 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
   results <-tryCatch({
     suppressWarnings({
       if (is.null(ROPE)) {
-        bin_table(threshold, target, h0, alpha, beta, location, scale, prior_analysis, alternative,
+        bin_table(threshold, true_rate, h0, alpha, beta, location, scale, prior_analysis, alternative,
                   alpha_d, beta_d, location_d, scale_d, prior_design, de_an_prior, N,
-                  mode_bf, FP, direct)
+                  mode_bf, false_rate, type_rate)
       } else {
-        bin_e_table(threshold, target, h0, alpha, beta, location, scale, prior_analysis, alternative,
+        bin_e_table(threshold, true_rate, h0, alpha, beta, location, scale, prior_analysis, alternative,
                     alpha_d, beta_d, location_d, scale_d, prior_design, de_an_prior, N,
-                    mode_bf, FP, ROPE, direct)
+                    mode_bf, false_rate, ROPE, type_rate)
       }
     })
   }, error = function(err) {
@@ -1716,6 +1630,7 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
   type = "One proportion"
   analysis_h1 <- list(
     prior = prior_analysis,
+    location = location,
     alpha=alpha,
     beta=beta,
     scale=scale
@@ -1728,7 +1643,9 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
       prior = prior_design,
       alpha=alpha_d,
       beta=beta_d,
-      scale=scale_d
+      scale=scale_d,
+      location = location_d
+
     )
 
 
@@ -1739,7 +1656,9 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
       prior = NULL,
       alpha=NULL,
       beta=NULL,
-      scale=NULL)
+      scale=NULL,
+      location = NULL
+    )
 
   }
 
@@ -1753,17 +1672,15 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
     design_h1 = design_h1,
     results = results,
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_bin"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 
 }
 
-#' Sample Size Determination for the Bayesian test of two proportions
+#' Sample Size Determination for the Bayesian Test of Two Proportions
 #'
 #' Perform sample size determination or calculate probabilities of compelling and misleading evidence
 #' for a Bayesian comparison of two proportions.
@@ -1784,15 +1701,12 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
 #' @param a2d Numeric scalar. Alpha parameter of the design prior for group 2 (used if \code{model2 = "beta"}).
 #' @param b2d Numeric scalar. Beta parameter of the design prior for group 2 (used if \code{model2 = "beta"}).
 #' @param dp2 Numeric scalar. True proportion for group 2 in the design prior (used if \code{model2 = "Point"}).
-#' @param n1 Numeric integer. Sample size for group 1.
-#' @param n2 Numeric integer. Sample size for group 2.
+#' @param N1 Numeric integer. Sample size for group 1.
+#' @param N2 Numeric integer. Sample size for group 2.
 #' @param type_rate Character. Choose \code{"positive"} to control true/false positive rates or \code{"negative"} to control true/false negative rates.
-#' @param plot_power Logical; if TRUE, plot the power curve.
-#' @param plot_rel Logical; if TRUE, plot the grid for the values of BF across all possible combination of x1 and x2.
-#'
 #' @details
 #'
-#' \strong{1. Sample size determination mode (when \code{n1 = NULL} and \code{n2 = NULL}):}
+#' \strong{1. Sample size determination mode (when \code{N1 = NULL} and \code{N2 = NULL}):}
 #'
 #' If no sample sizes are provided for the two groups, the function calculates the minimum sample sizes needed to achieve the desired configuration. The user must provide:
 #' \itemize{
@@ -1803,9 +1717,9 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
 #'
 #' The function iteratively finds the smallest sample sizes for which the probability of obtaining compelling evidence meets or exceeds \code{true_rate}.
 #'
-#' \strong{2. Fixed-sample analysis mode (when \code{n1} and \code{n2} are supplied):}
+#' \strong{2. Fixed-sample analysis mode (when \code{N1} and \code{N2} are supplied):}
 #'
-#' If positive numeric sample sizes \code{n1} and \code{n2} are provided, the function computes the probabilities of obtaining compelling or misleading evidence for these fixed sample sizes. In this mode, \code{type_rate} and \code{true_rate} are ignored; only the Bayes factor threshold \code{threshold} is used.
+#' If positive numeric sample sizes \code{N1} and \code{N2} are provided, the function computes the probabilities of obtaining compelling or misleading evidence for these fixed sample sizes. In this mode, \code{type_rate} and \code{true_rate} are ignored; only the Bayes factor threshold \code{threshold} is used.
 #'
 #' \strong{Model specification:}
 #'
@@ -1822,26 +1736,19 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
 #' \item \code{prior_design_2}, \code{a2d}, \code{b2d}, \code{dp2} - design prior for group 2.
 #' }
 #'
-#' \strong{Plotting:}
-#'
-#' If \code{plot_power = TRUE}, a power curve is plotted showing the probability of compelling evidence as a function of sample sizes. If \code{plot_rel = TRUE}, a grid of Bayes factors across possible outcomes is plotted.
-#'
-#' @return An object of class \code{BFpower_2p} (a list) containing:
-#' \describe{
-#'   \item{\code{type}}{Character, always \code{"Two-proportions"}.}
-#'   \item{\code{analysis_h0}}{List of analysis prior parameters under the null, containing \code{a} and \code{b}.}
-#'   \item{\code{analysis_h1_theta_1}}{List of analysis prior parameters for group 1 under the alternative, containing \code{a} and \code{b}.}
-#'   \item{\code{analysis_h1_theta_2}}{List of analysis prior parameters for group 2 under the alternative, containing \code{a} and \code{b}.}
-#'   \item{\code{design_h1_theta_1}}{List of design prior parameters for group 1 under the alternative, containing \code{prior}, \code{a}, \code{b}, and \code{p}.}
-#'   \item{\code{design_h1_theta_2}}{List of design prior parameters for group 2 under the alternative, containing \code{prior}, \code{a}, \code{b}, and \code{p}.}
-#'   \item{\code{results}}{Data frame of probabilities of compelling and misleading evidence.}
-#'   \item{\code{grid}}{Grid used for computation.}
-#'   \item{\code{threshold}}{Threshold of compelling evidence.}
-#'   \item{\code{mode_bf}}{Character string specifying the mode (sample size determination or power calculation).}
-#'   \item{\code{plot_power}}{Logical; whether the power curve is plotted.}
-#'   \item{\code{plot_rel}}{Logical; whether the relationship between the Bayes factor and observed proportion differences is plotted.}
-#' }
-
+#' @return An object of class \code{BFpower} (a list) containing:
+#'   \itemize{
+#'     \item \code{type}: Character, always \code{"Two-proportions"}.
+#'     \item \code{analysis_h0}: List of analysis prior parameters under the null, containing \code{a} and \code{b}.
+#'     \item \code{analysis_h1_theta_1}: List of analysis prior parameters for group 1 under the alternative, containing \code{a} and \code{b}.
+#'     \item \code{analysis_h1_theta_2}: List of analysis prior parameters for group 2 under the alternative, containing \code{a} and \code{b}.
+#'     \item \code{design_h1_theta_1}: List of design prior parameters for group 1 under the alternative, containing \code{prior}, \code{a}, \code{b}, and \code{p}.
+#'     \item \code{design_h1_theta_2}: List of design prior parameters for group 2 under the alternative, containing \code{prior}, \code{a}, \code{b}, and \code{p}.
+#'     \item \code{results}: Data frame of probabilities of compelling and misleading evidence.
+#'     \item \code{grid}: Grid used for computation.
+#'     \item \code{threshold}: Threshold of compelling evidence.
+#'     \item \code{mode_bf}: Character string specifying the mode (sample size determination or power calculation).
+#'   }
 #' @examples
 #' BFpower.props(
 #' threshold = 3,
@@ -1851,9 +1758,7 @@ BFpower.bin <- function(alternative ,threshold , h0 ,
 #' a1 = 156,
 #' b1 = 339,
 #' a2 = 151,
-#' b2 = 339,
-#' plot_power = TRUE,
-#' plot_rel = TRUE)
+#' b2 = 339)
 #'
 #' @export
 
@@ -1861,35 +1766,33 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
                           a2 , b2 , prior_design_1 = "same",
                           a1d , b1d , dp1 , prior_design_2 = "same",
                           a2d, b2d , dp2 ,
-                          n1 = NULL, n2 = NULL,type_rate="positive",plot_power=FALSE,plot_rel=FALSE) {
+                          N1 = NULL, N2 = NULL,type_rate="positive") {
 
   # Check NULL
-  if (is.null(n1) && is.null(n2)) {
+  if (is.null(N1) && is.null(N2)) {
     mode_bf <- 1
+    r       <- 1
   } else {
     mode_bf <- 0
+    r       <- N2/N1
   }
 
-  # If both n1 and n2 are NULL > mode_bf = 1
+  # If both N1 and N2 are NULL > mode_bf = 1
   # If mode_bf = 1, check target range
   if (mode_bf==1){
     if (!(type_rate %in% c("positive", "negative"))) {
       stop("Argument [type_rate] must be `positive` (controlling true/false positive rates) or `negative` (controlling true/false negative rate)")
     }
-    direct= switch (type_rate,
-                    "positive" = "h1",
-                    "negative" = "h0"
-    )
+
     if (!is.numeric(true_rate) || length(true_rate) != 1 || !is.finite(true_rate) || true_rate <= 0.6 || true_rate >= 0.999) {
       stop("Argument [true_rate] (targeted true positive or true negative rate) must be a numeric scalar strictly greater than 0.6 and smaller than 0.999.")
     }
-    target = true_rate
 
     if (!is.numeric(threshold) || length(threshold) != 1 || !is.finite(threshold) || threshold <= 1) {
       stop("Argument [threshold] threshold of compelling evidence must be a numeric scalar greater than 1")
     }
   } else{
-    target=0
+    true_rate=0
   }
 
 
@@ -1897,14 +1800,14 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
   # If not NULL, check numeric, scalar, integer
   if (mode_bf == 0) {
 
-    # Check n1
-    if (!is.numeric(n1) || length(n1) != 1 || n1 %% 1 != 0 || n1 <= 0) {
-      stop("arg [n1] sample size for group 1 must be a positive numeric scalar integer (> 0).")
+    # Check N1
+    if (!is.numeric(N1) || length(N1) != 1 || N1 %% 1 != 0 || N1 <= 0) {
+      stop("arg [N1] sample size for group 1 must be a positive numeric scalar integer (> 0).")
     }
 
-    # Check n2
-    if (!is.numeric(n2) || length(n2) != 1 || n2 %% 1 != 0 || n2 <= 0) {
-      stop("arg [n2] sample size for group 2 must be a positive numeric scalar integer (> 0).")
+    # Check N2
+    if (!is.numeric(N2) || length(N2) != 1 || N2 %% 1 != 0 || N2 <= 0) {
+      stop("arg [N2] sample size for group 2 must be a positive numeric scalar integer (> 0).")
     }
   }
 
@@ -1946,7 +1849,7 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
 
   if (prior_design_1 == "same") {
 
-    # Automatically set all to NULL
+    # Automatically set all to default values as these are irrelevant
     a1d <- 1
     b1d <- 1
     dp1 <- 0.5
@@ -2024,11 +1927,10 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
 
 
 
-  r <- 1
   results=tryCatch({
     suppressWarnings({
-      pro_table_p2(threshold, target, a0, b0, a1, b1, a2, b2, r, prior_design_1,
-                   a1d, b1d, dp1, prior_design_2, a2d, b2d, dp2, mode_bf, n1, n2, direct)
+      pro_table_p2(threshold, true_rate, a0, b0, a1, b1, a2, b2, r, prior_design_1,
+                   a1d, b1d, dp1, prior_design_2, a2d, b2d, dp2, mode_bf, N1, N2, type_rate)
     })
   }, error = function(e) {
     message("Required Sample size > 5000 per group")
@@ -2074,12 +1976,10 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
     results = results[[1]],
     grid=results[[2]],
     threshold = threshold,
-    mode_bf = mode_bf,
-    plot_power=plot_power,
-    plot_rel=plot_rel
+    mode_bf = mode_bf
   )
-  class(object) <- "BFpower_2p"
-  plot(object)
+  class(object) <- "BFpower"
+
   return(object)
 
 }
@@ -2090,42 +1990,31 @@ BFpower.props <- function(threshold , true_rate , a0 , b0 , a1 , b1 ,
 #'
 #' @param tval Numeric scalar. Observed t-value from the one-sample t-test.
 #' @param df Numeric scalar. Degrees of freedom of the t-test (must be >= 1).
-#' @param prior_analysis Character string. Statistical model for the analysis prior under the alternative hypothesis.
-#'   Choices are:
-#'   \describe{
-#'     \item{"Normal"}{Normal distribution.}
-#'     \item{"Moment"}{Normal moment prior.}
-#'     \item{"t-distribution"}{Scaled t-distribution.}
-#'   }
+#' @param prior_analysis Character. Analysis prior under the
+#'   alternative hypothesis. Must be either \code{"Normal"} (normal distribution),
+#'   \code{"Moment"} (normal-moment prior), or \code{"t-distribution"} (t-distribution).
 #' @param location Numeric scalar. Location parameter for the analysis prior under the alternative hypothesis.
 #' @param scale Numeric scalar. Scale parameter for the analysis prior under the alternative hypothesis (must be > 0).
 #' @param dff Numeric scalar. Degrees of freedom for the t-distribution prior (only required if \code{prior_analysis = "t-distribution"}; must be > 0). Ignored otherwise.
-#' @param alternative Character string. The direction of the alternative hypothesis. One of:
-#'   \describe{
-#'     \item{"!="}{Two-sided (difference from 0).}
-#'     \item{">"}{Right-sided (greater than 0).}
-#'     \item{"<"}{Left-sided (less than 0).}
-#'   }
-#' @param ROPE Optional numeric vector. Specifies bounds for an interval null hypothesis. For:
-#'   \describe{
-#'     \item{Two-sided (\code{"two.sided"})}{Must be a numeric vector of length 2 with two distinct finite values.}
-#'     \item{Right-sided (\code{"greater"})}{Must be a numeric scalar > 0.}
-#'     \item{Left-sided (\code{"less"})}{Must be a numeric scalar < 0.}
-#'   }
+#' @param alternative Character. The direction of the alternative hypothesis two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #'
-#' @return A list of class \code{BFvalue_t} containing:
-#'   \describe{
-#'     \item{type}{Character, indicating "One-sample t-test".}
-#'     \item{bf10}{Numeric, the Bayes factor (BF10).}
-#'     \item{tval}{Observed t-value.}
-#'     \item{df}{Degrees of freedom.}
-#'     \item{analysis_h1}{List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.}
-#'     \item{alternative}{Character, the direction of the alternative hypothesis.}
-#'     \item{ROPE}{Optional numeric vector of interval null bounds.}
-#'     \item{d}{Numeric, observed Cohen's d.}
-#'     \item{p.value}{Numeric, p.value.}
+#' @return An object of class \code{"BFvalue_t"} containing:
+#'   \itemize{
+#'     \item \code{type}: Character indicating "One-sample t-test".
+#'     \item \code{bf10}: Numeric, the Bayes factor (BF10).
+#'     \item \code{tval}: Observed t-value.
+#'     \item \code{df}: Degrees of freedom.
+#'     \item \code{analysis_h1}: List with the analysis prior parameters:
+#'       \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.
+#'     \item \code{alternative}: Character, the direction of the alternative hypothesis.
+#'     \item \code{ROPE}: Optional numeric vector of interval null bounds.
+#'     \item \code{d}: Numeric, observed Cohen's d.
+#'     \item \code{p.value}: Numeric, p-value.
 #'   }
-#'
 #' @examples
 #' BF10.ttest.OneSample(
 #' tval = 2,
@@ -2159,26 +2048,21 @@ BF10.ttest.OneSample <- function(tval, df, prior_analysis, location, scale, dff,
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
   # Check e if provided
   if (!is.null(ROPE)) {
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
         stop("For alternative 'two.sided', Argument [e] must be a numeric vector of length 2 with two distinct finite values")
       }
     }
-    if (alternative == ">") {
+    if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
         stop("For alternative 'less', Argument [e] must be a numeric scalar > 0")
       }
     }
-    if (alternative == "<") {
+    if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
         stop("For alternative 'greater', Argument [e] must be a numeric scalar < 0")
@@ -2230,14 +2114,14 @@ BF10.ttest.OneSample <- function(tval, df, prior_analysis, location, scale, dff,
   }
   object=list(type=type,bf10=bf10,tval=tval,df=df,analysis_h1=analysis_h1,alternative=alternative,ROPE=ROPE,d=tval/sqrt(df+1),p.value=p.value)
 
-  class(object) <- "BFvalue_t"
+  class(object) <- "BFvalue"
 
   return(object)
 }
 
 
 
-#' Bayes Factor for Two-Sample Bayesian t-Test
+#' Bayes Factor for a Two-Sample Bayesian t-Test
 #'
 #' Compute the Bayes factor (BF10) for a two-sample independent-samples t-test. Supports both point-null and interval-null hypotheses.
 #'
@@ -2250,26 +2134,26 @@ BF10.ttest.OneSample <- function(tval, df, prior_analysis, location, scale, dff,
 #' @param scale Numeric scalar > 0. Scale parameter of the analysis prior.
 #' @param dff Numeric scalar. Degrees of freedom for the analysis prior (required if prior_analysis = \code{"t-distribution"}; ignored otherwise).
 #' @param alternative Character. The direction of the alternative hypothesis two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
-#' @param ROPE Optional numeric. Bounds for an interval null:
-#'   - For \code{"two.sided"}, must be a numeric vector of length 2 with distinct finite values.
-#'   - For \code{"greater"}, must be a single numeric scalar > 0.
-#'   - For \code{"less"}, must be a single numeric scalar < 0.
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #'
 #' @return A list of class \code{BFvalue_t} containing:
-#' \describe{
-#'   \item{type}{Character string describing the test type.}
-#'   \item{bf10}{Computed Bayes factor BF10.}
-#'   \item{tval}{Observed t-value.}
-#'   \item{df}{Degrees of freedom (currently NA / not computed).}
-#'   \item{analysis_h1}{List with the analysis prior parameters: \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.}
-#'   \item{alternative}{Hypothesis tested (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).}
-#'   \item{ROPE}{Interval bounds used, if any.}
-#'   \item{N1}{Sample size of group 1 .}
-#'   \item{N2}{Sample size of group 2 .}
-#'   \item{d}{Numeric, observed Cohen's d.}
-#'   \item{p.value}{Numeric, p.value.}
-#' }
-#'
+#'   \itemize{
+#'     \item \code{type}: Character string describing the test type.
+#'     \item \code{bf10}: Computed Bayes factor BF10.
+#'     \item \code{tval}: Observed t-value.
+#'     \item \code{df}: Degrees of freedom.
+#'     \item \code{analysis_h1}: List with the analysis prior parameters:
+#'       \code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.
+#'     \item \code{alternative}: Hypothesis tested (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).
+#'     \item \code{ROPE}: Interval bounds used, if any.
+#'     \item \code{N1}: Sample size of group 1.
+#'     \item \code{N2}: Sample size of group 2.
+#'     \item \code{d}: Numeric, observed Cohen's d.
+#'     \item \code{p.value}: Numeric, p-value.
+#'   }
 #' @examples
 #'BF10.ttest.TwoSample(
 #'  tval = -1.148,
@@ -2296,7 +2180,7 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
 
   # Example for N1
   if (!is.numeric(N1) || length(N1) != 1 || !is.finite(N1)) {
-    stop("Argument [N1] must be a numeric scalar")
+    stop("Argument [N1] must be a numeric integer")
   }
   if (N1 <= 2) {
     stop("Argument [N1] must be greater than 2")
@@ -2306,7 +2190,7 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
 
   # Similarly for N2
   if (!is.numeric(N2) || length(N2) != 1 || !is.finite(N2)) {
-    stop("Argument [N2] must be a numeric scalar")
+    stop("Argument [N2] must be a numeric integer")
   }
   if (N2 <= 2) {
     stop("Argument [N2] must be greater than 2")
@@ -2318,26 +2202,21 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
   # Check e if provided
   if (!is.null(ROPE)) {
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
         stop("For alternative 'two.sided', Argument [e] must be a numeric vector of length 2 with two distinct finite values")
       }
     }
-    if (alternative == ">") {
+    if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
         stop("For alternative 'less', Argument [e] must be a numeric scalar > 0")
       }
     }
-    if (alternative == "<") {
+    if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
         stop("For alternative 'greater', Argument [e] must be a numeric scalar < 0")
@@ -2380,7 +2259,7 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
     }
   )
 
-  type = "Indepedent-samples t-test (equal variance)"
+  type = "Independent-samples t-test (equal variance)"
   p.value <- t.pval(tval=tval, n1=n1, n2 = n2, alternative, ROPE = ROPE, type = "Indepedent-samples t-test (equal variance)")
 
   analysis_h1 <- list(
@@ -2393,14 +2272,14 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
   }
   object=list(type=type,bf10=bf10,tval=tval,df=df,analysis_h1=analysis_h1,alternative=alternative,ROPE=ROPE,N1=N1,N2=N2,d=tval/sqrt((n1*n2)/(n1+n2)),p.value=p.value)
 
-  class(object) <- "BFvalue_t"
+  class(object) <- "BFvalue"
 
   return(object)
 }
 
 
 
-#' Bayes factor for a Bayesian correlation test
+#' Bayes Factor for a Bayesian Correlation Test
 #'
 #' Calculate the Bayes factor (BF10) for a correlation coefficient, either against a point null
 #' or an interval null hypothesis. Supports default beta (\code{"d_beta"}), stretched beta (\code{"beta"}),
@@ -2415,8 +2294,10 @@ BF10.ttest.TwoSample <- function(tval, N1, N2, prior_analysis, location, scale, 
 #' @param alternative Character. The direction of the alternative hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).
 #' @param scale Numeric scalar. Scale parameter for the analysis normal-moment prior (\code{"Moment"}). Must be > 0.
 #' @param prior_analysis Character. Analysis prior: default beta (\code{"d_beta"}), beta (\code{"beta"}), or normal-moment (\code{"Moment"}).
-#' @param ROPE Numeric vector. Optional numeric vector specifying bounds for an interval null hypothesis. For \code{"two.sided"}, must be two distinct finite values between -0.5 and 0.5. For \code{"greater"} or \code{"less"}, must satisfy additional bounds relative to \code{h0}.
-#'
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @return A list with class \code{"BFvalue_r"} containing:
 #' \itemize{
 #'   \item \code{type}: "correlation"
@@ -2454,11 +2335,7 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
+
 
 
   # Equivlance test or not
@@ -2466,7 +2343,7 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
         stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
@@ -2476,10 +2353,10 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
         stop("For alternative 'two.sided', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
       }
       if ((h0 + min(ROPE)) <= -1 || (h0 + min(ROPE)) >= 1) {
-        stop("For alternative '!=', h0 + min(ROPE) must be between -1 and 1")
+        stop("For alternative 'two.sided', h0 + min(ROPE) must be between -1 and 1")
       }
 
-    } else if (alternative == ">") {
+    } else if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
         stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
@@ -2488,7 +2365,7 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
       if (ROPE > 0.5) stop("For alternative 'greater', ROPE must be <= 0.5")
       if ((h0 + ROPE) >= 1) stop("For alternative 'greater', h0 + ROPE must be < 1")
 
-    } else if (alternative == "<") {
+    } else if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
         stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
@@ -2544,11 +2421,12 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
     }
   )
 
-  type = "correlation"
+  type = "Correlation"
   p.value <- r.pval(r, n,h0, alternative , ROPE)
 
   analysis_h1 <- list(
     prior = prior_analysis,
+    location = location,
     k = k,
     alpha=alpha,
     beta=beta,
@@ -2556,7 +2434,7 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
   )
   object=list(type=type,bf10=bf10,h0=h0,r=r,n=n,analysis_h1=analysis_h1,alternative=alternative,ROPE=ROPE,p.value=p.value)
 
-  class(object) <- "BFvalue_r"
+  class(object) <- "BFvalue"
   return(object)
 }
 
@@ -2578,21 +2456,22 @@ BF10.cor <- function(r, n, k, alpha, beta, h0, alternative,  scale,  prior_analy
 #'   (only used when \code{prior_analysis = "effectsize"}).
 #' @param f_m Numeric scalar. Cohen's f effect-size parameter for the
 #'   analysis prior.
-#' @param prior_analysis character. Analysis prior under the
+#' @param prior_analysis Character. Analysis prior under the
 #'   alternative hypothesis. Must be either \code{"effectsize"} or
 #'   \code{"Moment"}.
 #' @param ROPE Numeric scaler. Optional numeric scalar specifying an upper bound for an interval
 #'   null hypothesis. If provided, must be > 0.
 #'
 #' @return A list of class \code{"BFvalue_f"} containing:
-#' \describe{
-#'   \item{\code{fval}}{Input F-value.}
-#'   \item{\code{df1}, \code{df2}}{Degrees of freedom.}
-#'   \item{\code{ROPE}}{Interval bound (if specified).}
-#'   \item{\code{analysis_h1}}{List containing the analysis prior specification, including the prior distribution, the scale \code{rscale}, f \code{f_m}, and degrees of freedom \code{dff}.}
-#'   \item{\code{bf10}}{The computed Bayes factor.}
-#'   \item{\code{p.value}}{p-value.}
-#' }
+#'   \itemize{
+#'     \item \code{fval}: Input F-value.
+#'     \item \code{df1}, \code{df2}: Degrees of freedom.
+#'     \item \code{ROPE}: Interval bound (if specified).
+#'     \item \code{analysis_h1}: List containing the analysis prior specification, including
+#'       the prior distribution, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}.
+#'     \item \code{bf10}: The computed Bayes factor.
+#'     \item \code{p.value}: p-value.
+#'   }
 #' @examples
 #' BF10.f.test(
 #'   fval = 4.5,
@@ -2688,7 +2567,7 @@ BF10.f.test <- function(fval, df1, df2, dff, rscale, f_m, prior_analysis, ROPE =
     bf10=bf10,
     p.value=p.value
   )
-  class(object) <- "BFvalue_f"
+  class(object) <- "BFvalue"
   return(object)
 
 }
@@ -2705,16 +2584,18 @@ BF10.f.test <- function(fval, df1, df2, dff, rscale, f_m, prior_analysis, ROPE =
 #'   (required if \code{prior_analysis = "beta"}).
 #' @param h0 Numeric scalar.  Null proportion value (numeric scalar between 0.1 and 0.9).
 #' @param scale Numeric scalar.  Scale parameter for the analysis prior (only used if \code{prior_analysis = "Moment"}).
-#' @param prior_analysis character. the analysis prior under the alternative hypothesis:
+#' @param prior_analysis Character. the analysis prior under the alternative hypothesis:
 #'   \code{"beta"} (stretched beta) or \code{"Moment"} (normal-moment prior).
-#' @param alternative character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
+#' @param alternative Character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
 #'   or left-sided (\code{"less"}).
-#' @param ROPE Numeric vector.  Optional numeric vector specifying bounds for an interval null; used if interval BF is calculated.
-#'
+#' @param ROPE Optional numeric vector. Specifies bounds for an interval
+#'   null hypothesis. For \code{"two.sided"} this must be a numeric vector
+#'   of length 2 with two distinct finite values; for \code{"greater"} a
+#'   numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.
 #' @return An object of class \code{"BFvalue_bin"} containing:
 #'   \itemize{
 #'     \item \code{bf10}: Bayes factor in favor of the alternative hypothesis.
-#'     \item \code{type}: Test type ("one-proportion").
+#'     \item \code{type}: Test type ("One-proportion").
 #'     \item \code{x}: Number of successes.
 #'     \item \code{n}: Sample size.
 #'     \item \code{h0}: Null proportion value.
@@ -2740,12 +2621,12 @@ BF10.f.test <- function(fval, df1, df2, dff, rscale, f_m, prior_analysis, ROPE =
 BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternative, ROPE = NULL) {
   # Check n
   if (!is.numeric(n) || length(n) != 1 || !is.finite(n) || n <= 0 || n != floor(n)) {
-    stop("Argument [n] sample size must be a positive integer scalar")
+    stop("Argument [n] sample size must be a positive integer integer")
   }
 
   # Check x
   if (!is.numeric(x) || length(x) != 1 || !is.finite(x) || x < 0 || x != floor(x)) {
-    stop("Argument [x] number of successes must be a non-negative integer scalar")
+    stop("Argument [x] number of successes must be a non-negative integer")
   }
 
   # Check relation
@@ -2762,11 +2643,6 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
     stop("Argument [alternative] should be set to either `less`  (left-sided test),  `two.sided` (two-sided test) or `greater` (right-sided test)")
   }
 
-  alternative <- switch(alternative,
-                        "two.sided" = "!=",
-                        "less"      = "<",
-                        "greater"   = ">"
-  )
 
 
   # Equivlance test or not
@@ -2774,36 +2650,36 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
 
   if (!is.null(ROPE)) {
 
-    if (alternative == "!=") {
+    if (alternative ==  "two.sided") {
       # e must be a numeric vector of length 2, both finite and distinct
       if (!is.numeric(ROPE) || length(ROPE) != 2 || any(!is.finite(ROPE)) || ROPE[1] == ROPE[2]) {
-        stop("For alternative '!=', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
+        stop("For alternative 'two.sided', Argument [ROPE] must be a numeric vector of length 2 with two distinct finite values")
       }
       # Additional bounds checks
       if (min(ROPE) < -0.5 || max(ROPE) > 0.5) {
-        stop("For alternative '!=', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
+        stop("For alternative 'two.sided', ROPE must satisfy min(ROPE) >= -0.5 and max(ROPE) <= 0.5")
       }
       if ((h0 + min(ROPE)) <= 0 || (h0 + min(ROPE)) >= 1) {
-        stop("For alternative '!=', h0 + min(ROPE) must be between 0 and 1")
+        stop("For alternative 'two.sided', h0 + min(ROPE) must be between 0 and 1")
       }
 
-    } else if (alternative == ">") {
+    } else if (alternative == "greater") {
       # e must be a numeric scalar > 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE <= 0) {
-        stop("For alternative '>', Argument [ROPE] must be a numeric scalar > 0")
+        stop("For alternative 'greater', Argument [ROPE] must be a numeric scalar > 0")
       }
       # Additional bounds checks
-      if (ROPE > 0.5) stop("For alternative '>', ROPE must be <= 0.5")
-      if ((h0 + ROPE) >= 1) stop("For alternative '>', h0 + ROPE must be < 1")
+      if (ROPE > 0.5) stop("For alternative 'greater', ROPE must be <= 0.5")
+      if ((h0 + ROPE) >= 1) stop("For alternative 'greater', h0 + ROPE must be < 1")
 
-    } else if (alternative == "<") {
+    } else if (alternative == "less") {
       # e must be a numeric scalar < 0
       if (!is.numeric(ROPE) || length(ROPE) != 1 || !is.finite(ROPE) || ROPE >= 0) {
-        stop("For alternative '<', Argument [ROPE] must be a numeric scalar < 0")
+        stop("For alternative 'less', Argument [ROPE] must be a numeric scalar < 0")
       }
       # Additional bounds checks
-      if (ROPE < -0.5) stop("For alternative '<', ROPE must be >= -0.5")
-      if ((h0 + ROPE) <= -1) stop("For alternative '<', h0 + ROPE must be > 0")
+      if (ROPE < -0.5) stop("For alternative 'less', ROPE must be >= -0.5")
+      if ((h0 + ROPE) <= -1) stop("For alternative 'less', h0 + ROPE must be > 0")
     }
 
   }
@@ -2846,22 +2722,23 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
     }
   )
 
-  type = "one-proportion"
+  type = "One-proportion"
   p.value <- bin.pval(x,n,h0,alternative,ROPE)
 
   analysis_h1 <- list(
     prior = prior_analysis,
+    location = h0,
     alpha=alpha,
     beta=beta,
     scale=scale
   )
   object=list(type=type,bf10=bf10,h0=h0,x=x,n=n,analysis_h1=analysis_h1,alternative=alternative,ROPE=ROPE,p.value=p.value)
 
-  class(object) <- "BFvalue_bin"
+  class(object) <- "BFvalue"
   return(object)
 }
 
-#' Bayes factor for comparing two proportions
+#' Bayes Factor for Comparing Two Proportions
 #'
 #' Compute the Bayes factor (BF10) for a Bayesian test of two proportions.
 #'
@@ -2871,8 +2748,8 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
 #' @param b1 Numeric scalar. Beta parameter of the Beta prior for group 1 under the alternative hypothesis.
 #' @param a2 Numeric scalar. Alpha parameter of the Beta prior for group 2 under the alternative hypothesis.
 #' @param b2 Numeric scalar. Beta parameter of the Beta prior for group 2 under the alternative hypothesis.
-#' @param n1 Numeric integer. Sample size for group 1.
-#' @param n2 Numeric integer. Sample size for group 2.
+#' @param N1 Numeric integer. Sample size for group 1.
+#' @param N2 Numeric integer. Sample size for group 2.
 #' @param x1 Numeric integer. Number of successes observed in group 1.
 #' @param x2 Numeric integer. Number of successes observed in group 2.
 #'
@@ -2883,7 +2760,7 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
 #'   \item \code{analysis_h1_theta_1}: list with \code{a} and \code{b} for group 1 prior under H1.
 #'   \item \code{analysis_h1_theta_2}: list with \code{a} and \code{b} for group 2 prior under H1.
 #'   \item \code{bf10}: the computed Bayes factor (BF10).
-#'   \item \code{n1}, \code{x1}, \code{n2}, \code{x2}: the input sample sizes and observed successes.
+#'   \item \code{N1}, \code{x1}, \code{N2}, \code{x2}: the input sample sizes and observed successes.
 #'    \item \code{OddRatio}: observed odd ratio.
 #'    \item \code{p.value}: p.value.
 #' }
@@ -2895,12 +2772,12 @@ BF10.bin.test <- function(x, n, alpha, beta, h0, scale, prior_analysis, alternat
 #' b1 = 1,
 #' a2 = 1,
 #' b2 = 1,
-#' n1 = 493,
-#' n2 = 488,
+#' N1 = 493,
+#' N2 = 488,
 #' x1 = 155,
 #' x2 = 150)
 #' @export
-BF10.props <- function(a0, b0, a1, b1, a2, b2, n1, n2, x1, x2) {
+BF10.props <- function(a0, b0, a1, b1, a2, b2, N1, N2, x1, x2) {
 
 
   # null hypothesis
@@ -2937,11 +2814,11 @@ BF10.props <- function(a0, b0, a1, b1, a2, b2, n1, n2, x1, x2) {
   }
 
   # sample sizes
-  if (!is.numeric(n1) || length(n1) != 1 || n1 %% 1 != 0 || n1 <= 0) {
-    stop("arg [n1] sample size for group 1 must be a positive numeric scalar integer (> 0).")
+  if (!is.numeric(N1) || length(N1) != 1 || N1 %% 1 != 0 || N1 <= 0) {
+    stop("arg [N1] sample size for group 1 must be a positive numeric scalar integer (> 0).")
   }
-  if (!is.numeric(n2) || length(n2) != 1 || n2 %% 1 != 0 || n2 <= 0) {
-    stop("arg [n2] sample size for group 2 must be a positive numeric scalar integer (> 0).")
+  if (!is.numeric(N2) || length(N2) != 1 || N2 %% 1 != 0 || N2 <= 0) {
+    stop("arg [N2] sample size for group 2 must be a positive numeric scalar integer (> 0).")
   }
 
   # observed successes
@@ -2952,17 +2829,17 @@ BF10.props <- function(a0, b0, a1, b1, a2, b2, n1, n2, x1, x2) {
     stop("arg [x2] for group 2 must be a non-negative numeric scalar integer (\u2265 0).")
   }
 
-  if (x1 > n1) {
-    stop("arg [x1] number of successes in group 1 cannot exceed n1 (sample size).")
+  if (x1 > N1) {
+    stop("arg [x1] number of successes in group 1 cannot exceed N1 (sample size).")
   }
-  if (x2 > n2) {
-    stop("arg [x2] number of successes in group 2 cannot exceed n2 (sample size).")
+  if (x2 > N2) {
+    stop("arg [x2] number of successes in group 2 cannot exceed N2 (sample size).")
   }
 
-  bf10=BF10_p2(a0, b0, a1, b1, a2, b2, n1, n2, x1, x2)
+  bf10=BF10_p2(a0, b0, a1, b1, a2, b2, N1, N2, x1, x2)
   tab <- matrix(
-    c(x1, n1 - x1,
-      x2, n2 - x2),
+    c(x1, N1 - x1,
+      x2, N2 - x2),
     nrow = 2,
     byrow = TRUE
   )
@@ -2989,14 +2866,14 @@ BF10.props <- function(a0, b0, a1, b1, a2, b2, n1, n2, x1, x2) {
     analysis_h1_theta_1= analysis_h1_theta_1,
     analysis_h1_theta_2=analysis_h1_theta_2,
     bf10=bf10,
-    n1=n1,
+    N1=N1,
     x1=x1,
-    n2=n2,
+    N2=N2,
     x2=x2,
     OddRatio = results$estimate,
     p.value=results$p.value
   )
-  class(object) <- "BFvalue_2p"
+  class(object) <- "BFvalue"
   return(object)
 
 }

@@ -31,19 +31,22 @@ BF10.bin.test(
 
 \item{scale}{Numeric scalar.  Scale parameter for the analysis prior (only used if \code{prior_analysis = "Moment"}).}
 
-\item{prior_analysis}{character. the analysis prior under the alternative hypothesis:
+\item{prior_analysis}{Character. the analysis prior under the alternative hypothesis:
 \code{"beta"} (stretched beta) or \code{"Moment"} (normal-moment prior).}
 
-\item{alternative}{character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
+\item{alternative}{Character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
 or left-sided (\code{"less"}).}
 
-\item{ROPE}{Numeric vector.  Optional numeric vector specifying bounds for an interval null; used if interval BF is calculated.}
+\item{ROPE}{Optional numeric vector. Specifies bounds for an interval
+null hypothesis. For \code{"two.sided"} this must be a numeric vector
+of length 2 with two distinct finite values; for \code{"greater"} a
+numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.}
 }
 \value{
 An object of class \code{"BFvalue_bin"} containing:
 \itemize{
 \item \code{bf10}: Bayes factor in favor of the alternative hypothesis.
-\item \code{type}: Test type ("one-proportion").
+\item \code{type}: Test type ("One-proportion").
 \item \code{x}: Number of successes.
 \item \code{n}: Sample size.
 \item \code{h0}: Null proportion value.
