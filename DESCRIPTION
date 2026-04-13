@@ -1,7 +1,7 @@
 Package: BayesPower
 Title: Sample Size and Power Calculation for Bayesian Testing with
         Bayes Factor
-Version: 1.0.3
+Version: 1.0.4
 Authors@R: c(
     person("Tsz Keung", "Wong", email = "t.k.wong3004@gmail.com", role = c("aut", "cre")),
     person("Samuel", "Pawel", role = c("aut")),
@@ -16,10 +16,10 @@ Imports: rlang, shiny, gsl, Rcpp, ExtDist, ggplot2, patchwork,
         tidyr, scales
 LinkingTo: Rcpp, BH
 NeedsCompilation: yes
-Packaged: 2026-03-16 10:56:50 UTC; u971096
+Packaged: 2026-04-13 12:27:20 UTC; u971096
 Author: Tsz Keung Wong [aut, cre],
   Samuel Pawel [aut],
   Jorge Tendeiro [aut]
 Maintainer: Tsz Keung Wong <t.k.wong3004@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-03-16 11:10:02 UTC
+Date/Publication: 2026-04-13 12:50:02 UTC
