@@ -8,67 +8,78 @@ BF10.ttest.TwoSample(
   tval,
   N1,
   N2,
+  alternative,
+  ROPE = NULL,
   prior_analysis,
   location,
   scale,
-  dff,
-  alternative,
-  ROPE = NULL
+  dff
 )
 }
 \arguments{
 \item{tval}{Numeric scalar. Observed t-value from the two-sample t-test.}
 
-\item{N1}{Numeric integer. Sample size of group 1 (must be > 2, will be rounded to nearest integer).}
+\item{N1}{Numeric integer. Sample size of group 1 (must be > 2).}
 
-\item{N2}{Numeric integer. Sample size of group 2 (must be > 2, will be rounded to nearest integer).}
+\item{N2}{Numeric integer. Sample size of group 2 (must be > 2).}
+
+\item{alternative}{Character. The direction of the alternative hypothesis : two-sided (\code{"two.sided"} ), right-sided (\code{"greater"}), or left-sided (\code{"less"}).}
+
+\item{ROPE}{Optional numeric vector or scalar. Specifies the region of practical
+equivalence relative to the point null value of zero.
+Thus, \code{ROPE} defines the interval of values considered
+practically equivalent to the null value.
+
+For \code{alternative = "two.sided"}, argument \code{ROPE} must be a numeric vector of length 2 with two distinct finite values such that the first element
+is negative and the second element is positive (i.e., \code{ROPE[1] < 0 < ROPE[2]}). Example: If \code{alternative = "two.sided"} and \code{ROPE = c(-0.2, 0.2)},
+then the region of practical equivalence is \code{[-0.2, 0.2]}.
+
+For \code{alternative = "greater"}, argument \code{ROPE} must be a numeric scalar > 0. Example: If \code{alternative = "greater"} and \code{ROPE = 0.2},
+then the region of practical equivalence is \code{[0, 0.2]}.
+
+For \code{alternative = "less"}, argument \code{ROPE} must be a numeric scalar < 0.Example: If \code{alternative = "less"} and \code{ROPE = -0.2},
+then the region of practical equivalence is \code{[-0.2, 0]}.}
 
 \item{prior_analysis}{Character. Analysis prior under the alternative hypothesis:
 \code{"Normal"}, \code{"Moment"} (normal-moment prior), or \code{"t-distribution"}.}
 
-\item{location}{Numeric scalar. Location parameter of the analysis prior.}
+\item{location}{Numeric scalar. Location parameter of the analysis prior under the alternative hypothesis.}
 
-\item{scale}{Numeric scalar > 0. Scale parameter of the analysis prior.}
+\item{scale}{Numeric scalar > 0. Scale parameter of the analysis prior under the alternative hypothesis.}
 
-\item{dff}{Numeric scalar. Degrees of freedom for the analysis prior (required if prior_analysis = \code{"t-distribution"}; ignored otherwise).}
-
-\item{alternative}{Character. The direction of the alternative hypothesis two-sided (\code{"two.sided"}), right-sided (\code{"greater"}), or left-sided (\code{"less"}).}
-
-\item{ROPE}{Optional numeric vector. Specifies bounds for an interval
-null hypothesis. For \code{"two.sided"} this must be a numeric vector
-of length 2 with two distinct finite values; for \code{"greater"} a
-numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.}
+\item{dff}{Numeric scalar. Degrees of freedom for the analysis prior under the alternative hypothesis (required if prior_analysis = \code{"t-distribution"}; ignored otherwise).}
 }
 \value{
-A list of class \code{BFvalue_t} containing:
+A list of class \code{BFvalue} containing:
 \itemize{
-\item \code{type}: Character string describing the test type.
-\item \code{bf10}: Computed Bayes factor BF10.
-\item \code{tval}: Observed t-value.
-\item \code{df}: Degrees of freedom.
+\item \code{type}: Character. Test type (always  "Independent-samples t-test (equal variance)").
+\item \code{bf10}: Numeric scalar. The computed Bayes factor in favor of the alternative hypothesis relative to the null hypothesis.
+\item \code{tval}: Numeric scalar. Observed t-value.
+\item \code{df}: Numeric scalar. Degrees of freedom.
 \item \code{analysis_h1}: List with the analysis prior parameters:
-\code{prior_analysis}, \code{location}, \code{scale}, and optionally \code{dff}.
-\item \code{alternative}: Hypothesis tested (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).
-\item \code{ROPE}: Interval bounds used, if any.
-\item \code{N1}: Sample size of group 1.
-\item \code{N2}: Sample size of group 2.
-\item \code{d}: Numeric, observed Cohen's d.
-\item \code{p.value}: Numeric, p-value.
+\code{prior} (prior distribution), \code{location}, \code{scale}, and
+optionally \code{dff}.
+\item \code{alternative}: Character. The direction of the alternative hypothesis (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).
+\item \code{ROPE}: Optional numeric vector or scalar. Interval bounds under the null, if any.
+\item \code{N1}: Positive integer scalar. Sample size of group 1.
+\item \code{N2}: Positive integer scalar. Sample size of group 2.
+\item \code{d}: Numeric scalar. Observed Cohen's d.
+\item \code{p.value}: Numeric scalar. p-value.
 }
 }
 \description{
-Compute the Bayes factor (BF10) for a two-sample independent-samples t-test. Supports both point-null and interval-null hypotheses.
+Calculate the Bayes factor (BF10) for a two-sample independent t-test with equal variances. Supports both point-null and interval-null hypotheses.
 }
 \examples{
 BF10.ttest.TwoSample(
  tval = -1.148,
  N1 = 53,
  N2 = 48,
+ alternative = "two.sided",
+ ROPE = c(-0.36,0.36),
  prior_analysis = "t-distribution",
  location = 0,
  scale = 0.707,
- dff = 1,
- alternative = "two.sided",
- ROPE = c(-0.36,0.36))
+ dff = 1)
 
 }

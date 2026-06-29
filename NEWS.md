@@ -1,3 +1,10 @@
+# BayesPower 1.0.5
+
+* Improved the consistency between the documentation and their corresponding exported functions.
+* Improved input validation in the Shiny app. For example, invalid sample-size inputs such as zero or negative values are now automatically adjusted to the smallest allowed value.
+* Shiny app can be opened via "Addins" in the main tool bar for Rstudio users.
+
+
 # BayesPower 1.0.4
 
 * Updated documentation for all exported functions.

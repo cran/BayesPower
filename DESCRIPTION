@@ -1,7 +1,7 @@
 Package: BayesPower
 Title: Sample Size and Power Calculation for Bayesian Testing with
         Bayes Factor
-Version: 1.0.4
+Version: 1.0.5
 Authors@R: c(
     person("Tsz Keung", "Wong", email = "t.k.wong3004@gmail.com", role = c("aut", "cre")),
     person("Samuel", "Pawel", role = c("aut")),
@@ -10,16 +10,18 @@ Description: The goal of 'BayesPower' is to provide tools for Bayesian sample si
 BugReports: https://github.com/tkWong3004/BayesPower/issues
 License: GPL (>= 3)
 Encoding: UTF-8
-RoxygenNote: 7.3.3
 Imports: rlang, shiny, gsl, Rcpp, ExtDist, ggplot2, patchwork,
         rmarkdown, glue, hypergeo, rootSolve, shinyWidgets, grDevices,
-        tidyr, scales
+        tidyr, scales, httpuv, utils
 LinkingTo: Rcpp, BH
+Suggests: testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
 NeedsCompilation: yes
-Packaged: 2026-04-13 12:27:20 UTC; u971096
+Packaged: 2026-06-29 12:01:19 UTC; u971096
 Author: Tsz Keung Wong [aut, cre],
   Samuel Pawel [aut],
   Jorge Tendeiro [aut]
 Maintainer: Tsz Keung Wong <t.k.wong3004@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-04-13 12:50:02 UTC
+Date/Publication: 2026-06-29 12:30:02 UTC

@@ -6,82 +6,86 @@
 \usage{
 BFpower.f.test(
   threshold,
+  type_rate = "positive",
   true_rate,
   false_rate,
+  N = NULL,
   p,
   k,
+  ROPE = NULL,
   prior_analysis,
-  dff,
   rscale,
   f_m,
+  dff,
   prior_design = NULL,
-  dff_d,
   rscale_d,
   f_m_d,
-  N = NULL,
-  type_rate = "positive",
-  ROPE = NULL
+  dff_d
 )
 }
 \arguments{
-\item{threshold}{Numeric scalar. Threshold for compelling evidence (must be at least 1).}
+\item{threshold}{Numeric scalar. Threshold for compelling evidence (must be \eqn{\ge 1}).}
 
-\item{true_rate}{Numeric scalar. Targeted true positive or true negative rate (used only when
-sample size determination is requested; \code{N = NULL}).}
+\item{type_rate}{Character. Either \code{"positive"} (control true/false positive rates) or
+\code{"negative"} (control true/false negative rates).}
 
-\item{false_rate}{Numeric scalar. Targeted false positive or false negative rate (used only when
-sample size determination is requested; \code{N = NULL}).}
+\item{true_rate}{Numeric scalar. Target true positive or negative rate (between 0.6 and 0.999) for sample size determination.}
+
+\item{false_rate}{Numeric scalar. Target false positive or false negative rate (between 0.001 and 0.1) for sample size determination.}
+
+\item{N}{Optional integer. Sample size for power calculation. If \code{NULL}, sample size determination is performed.
+If \code{N} of at least \code{k + 1} is supplied, power calculation for a fixed sample size is performed.}
 
 \item{p}{Numeric integer. Number of predictors in the reduced model.}
 
 \item{k}{Numeric integer. Number of predictors in the full model (must satisfy \code{k > p}).}
 
-\item{prior_analysis}{Character. Analysis prior model under the alternative hypothesis:
+\item{ROPE}{Optional numeric scalar. Specifies the upper bound of the region
+of practical equivalence, whose lower bound is fixed at zero. Thus,
+\code{ROPE} defines the interval of values considered practically
+equivalent to the null value. If provided, it must be positive.
+
+For example, if \code{ROPE = 0.2}, then the region of practical equivalence
+is \code{[0, 0.2]}.}
+
+\item{prior_analysis}{Character. The analysis prior model under the alternative hypothesis:
 \code{"effectsize"} or \code{"Moment"}.}
 
-\item{dff}{Numeric scalar. Degrees of freedom for the analysis prior under the alternative
-hypothesis. Must be a positive scalar, and must be at least 3 if
-\code{prior_analysis = "Moment"}.}
+\item{rscale}{Numeric scalar. Scale parameter for the effect-size analysis prior under the alternative hypothesis (required if \code{prior_analysis = "effectsize"}).}
 
-\item{rscale}{Numeric scalar. Scale parameter for the analysis effect-size prior (only used when
-\code{prior_analysis = "effectsize"}).}
+\item{f_m}{Numeric scalar. Cohen's f location parameter for the analysis prior under the alternative hypothesis.}
 
-\item{f_m}{Numeric scalar. Cohen's \eqn{f} effect-size parameter for the analysis prior (must be > 0).}
+\item{dff}{Numeric scalar. Degrees of freedom for the analysis prior under
+the alternative hypothesis. For the Moment prior, this must be \eqn{\ge 3}.}
 
 \item{prior_design}{Character. Design prior model under the alternative hypothesis:
 \code{"effectsize"}, \code{"Moment"}, or \code{"Point"}.}
 
-\item{dff_d}{Numeric scalar. Degrees of freedom for the design prior. Must be a positive scalar,
-and at least 3 if \code{prior_design = "Moment"}.}
+\item{rscale_d}{Numeric scalar. Scale parameter for the effect-size design prior under the alternative hypothesis (required if \code{prior_design = "effectsize"}).}
 
-\item{rscale_d}{Numeric scalar. Scale parameter for the design effect-size prior
-(only used when \code{prior_design = "effectsize"}).}
+\item{f_m_d}{Numeric scalar.  Cohen's f location parameter for the design prior under the alternative hypothesis.}
 
-\item{f_m_d}{Numeric scalar. Cohen's \eqn{f} value for the design prior or the effect-size of the
-point design prior.}
-
-\item{N}{Numeric integer. Sample size. If \code{NULL}, sample size determination is performed.}
-
-\item{type_rate}{Character. Either \code{"positive"} (control true/false positive rates) or
-\code{"negative"} (control true/false negative rates).}
-
-\item{ROPE}{Numeric vector. Numeric bounds for the interval null (only used when interval
-Bayes factors are required).}
+\item{dff_d}{Numeric scalar. Degrees of freedom for the design prior under
+the alternative hypothesis. For the Moment prior, this must be \eqn{\ge 3}.}
 }
 \value{
 A list of class \code{BFpower} containing:
 \itemize{
-\item \code{type}: Test type (always "Regression/ANOVA").
-\item \code{k}, \code{p}: Number of predictors in the full and reduced models.
-\item \code{ROPE}: Bounds for interval null (if used).
+\item \code{type}: Character. Test type (always "Regression/ANOVA").
+\item \code{threshold}: Numeric scalar. Threshold of compelling evidence.
+\item \code{p}: Numeric integer. Number of predictors in the reduced model.
+\item \code{k}: Numeric integer. Number of predictors in the full model (must satisfy \code{k > p}).
+\item \code{ROPE}: Optional numeric scalar. Interval bounds under the null, if any.
 \item \code{analysis_h1}: List containing the analysis prior specification, including
-the prior distribution, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}.
+the prior distribution \code{prior}, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}.
 \item \code{design_h1}: List containing the design prior specification, including
-the prior distribution, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}
-(or \code{NULL} if not specified).
+the prior distribution \code{prior}, the scale \code{rscale}, \code{f_m}, and degrees of freedom \code{dff}.
 \item \code{results}: Data frame of probabilities of compelling/misleading evidence and
 the required or supplied sample size.
-\item \code{threshold}: Threshold of compelling evidence.
+\item \code{setting}: List containing \code{mode_bf}, indicating whether
+sample size determination (\code{1}) or power calculation (\code{0}) is
+performed, and \code{same.priors}, indicating whether the design and
+analysis priors are the same (\code{1}) or not the same (\code{0}).
 }
 If sample size determination fails, the function returns \code{NaN} and prints a message.
 }
@@ -91,45 +95,56 @@ Can handle both point-null and interval-null hypothesis, and allows specifying
 analysis and design priors.
 }
 \details{
-\strong{1. Sample Size Determination Mode (when \code{N = NULL}):}
+\strong{Sample Size Determination Mode (when \code{N = NULL}):}
 
 If no sample size is provided, the function calculates the minimum sample size needed to achieve the desired configuration below. The user must provide:
 \itemize{
+\item \code{threshold} - the Bayes factor threshold for compelling evidence (must be \eqn{\ge 1}).
 \item \code{type_rate} - either \code{"positive"} to control true/false positive rates, or \code{"negative"} to control true/false negative rates.
 \item \code{true_rate} - the targeted true positive or true negative rate (between 0.6 and 0.999).
 \item \code{false_rate} - the acceptable false positive or false negative rate (between 0.001 and 0.1).
-\item \code{threshold} - the Bayes factor threshold for compelling evidence (must be > 1).
 }
 
 The function iteratively finds the smallest sample size for which the probability of obtaining compelling evidence (i.e., true positive/negative rate) meets or exceeds \code{true_rate}, while the probability of misleading evidence (i.e., false positive/negative rate) does not exceed \code{false_rate}.
 
-\strong{2. Fixed-sample Analysis Mode (when \code{N} is supplied):}
+\strong{Fixed-sample Analysis Mode (when \code{N} is supplied):}
 
-If a positive numeric sample size \code{N} is provided, the function computes the probabilities of obtaining compelling or misleading evidence for that fixed sample size. In this mode, \code{type_rate}, \code{true_rate}, and \code{false_rate} are ignored; only the Bayes factor threshold \code{threshold} is used.
+If a positive integer sample size \code{N} is provided, the function computes the probabilities
+of obtaining compelling or misleading evidence for that fixed sample size. In this mode,
+\code{type_rate}, \code{true_rate}, and \code{false_rate} are ignored; only the Bayes factor
+threshold \code{threshold} is used. The supplied \code{N} must satisfy
+\code{N >= k + 1}.
 
 \strong{Interval Null Hypothesis:}
 
 The interval null hypothesis can be specified using the argument \code{ROPE},
-which defines an interval around the null value of 0. The specified value of \code{ROPE} should be a positive numeric scaler.
+which defines  the upper bound of the region
+of practical equivalence, whose lower bound is fixed at zero. Thus,
+\code{ROPE} defines the interval of values considered practically
+equivalent to the null value. If provided, it must be positive.
+
+Example: If \code{ROPE =  0.2}, then the effective null interval is \code{[0, 0.2]}.
+
 If \code{ROPE = NULL}, a point-null hypothesis is assumed.
 
 \strong{Analysis Priors:}
 
 The user must specify the analysis prior under the alternative hypothesis using \code{prior_analysis}:
 \itemize{
-\item \code{effectsize} (effect size prior): \code{rscale} > 0, \code{f_m} , and \code{dff}.
-\item \code{Moment} (normal-moment prior): \code{f_m} and \code{dff} \eqn{\ge 3}.
+\item \code{effectsize} (effect size prior): \code{rscale > 0}, \code{f_m > 0}, and \code{dff > 0}.
+\item \code{Moment} (normal-moment prior): \code{f_m > 0} and \code{dff >= 3}.
 }
 
 \strong{Design Priors (optional):}
 
 The design prior under the alternative hypothesis can optionally be specified using \code{prior_design}:
 \itemize{
-\item \code{effectsize} (effect size prior): \code{rscale_d} > 0, \code{f_m_d}, and \code{dff_d} .
-\item \code{Moment} (normal-moment prior): \code{f_m_d} and \code{dff_d} \eqn{\ge 3}.
-\item \code{Point} (point prior): \code{f_m_d}.
+\item \code{effectsize} (effect size prior): \code{rscale_d > 0}, \code{f_m_d > 0}, and \code{dff_d > 0}.
+\item \code{Moment} (normal-moment prior): \code{f_m_d > 0} and \code{dff_d >= 3}.
+\item \code{Point} (point prior): \code{f_m_d > 0}.
 }
-If \code{prior_design} is \code{NULL}, no design prior is used.
+
+If \code{prior_design} is \code{NULL}, the analysis prior is used as the design prior.
 }
 \examples{
 BFpower.f.test(
@@ -139,9 +154,9 @@ BFpower.f.test(
  p = 3,
  k = 4,
  prior_analysis = "effectsize",
- dff = 3,
  rscale = 0.18,
  f_m = 0.1,
+ dff = 3,
  prior_design = "Point",
  f_m_d = 0.1)
 

@@ -6,7 +6,7 @@ NULL
 ui <-
   shiny::navbarPage(id = "id",
                     windowTitle = "BayesPower: Bayes Factor",
-                 "\\(\\text{BayesPower}_{1.0.4}: \\text{Bayes Factor}\\)",
+                 "\\(\\text{BayesPower}_{1.0.5}: \\text{Bayes Factor}\\)",
   shiny::navbarMenu(
     "\\(\\text{Standardized Mean Difference}\\)",
 
@@ -223,7 +223,14 @@ ui <-
 
           # Run button + error message
           shiny::conditionalPanel("input.Modet1 == 1 || input.Modet1 == 2",
-                           shiny::actionButton("runt1", label = "\\(\\text{Run}\\)")
+                                  shiny::tags$div(
+                                    style = "margin-bottom: 12px;",
+                                    shiny::actionButton(
+                                      "runt1",
+                                      label = "\\(\\text{Run}\\)",
+                                      class = "btn-success"
+                                    )
+                                  )
           ),
 
           # BF calculator mode
@@ -232,7 +239,14 @@ ui <-
                              shiny::column(6, shiny::numericInput("t1df", "\\(\\text{Degree of freedom:}\\)", value = 50)),
                              shiny::column(6, shiny::numericInput("t1tval", "\\(\\text{t-value:}\\)", value = 2))
                            ),
-                           shiny::actionButton("cal1", label = "\\(\\text{Calculate}\\)"),
+                           shiny::tags$div(
+                             style = "margin-bottom: 12px;",
+                             shiny::actionButton(
+                               "cal1",
+                               label = "\\(\\text{Calculate}\\)",
+                               class = "btn-success"
+                             )
+                           ),
                            shiny::htmlOutput("BFt1"),
                            shiny::em("\\(t\\text{-value calculator}\\)"),
 
@@ -512,7 +526,14 @@ ui <-
                                                      shiny::column(4, shiny::numericInput("t2tval", "\\(\\text{t-value:}\\)", value = 2)))
                              ),
                            shiny::conditionalPanel("input.Modet2 == 3",
-                                                   shiny::actionButton("cal2", label = "\\(\\text{Calculate}\\)"),
+                                                   shiny::tags$div(
+                                                     style = "margin-bottom: 12px;",
+                                                     shiny::actionButton(
+                                                       "cal2",
+                                                       label = "\\(\\text{Calculate}\\)",
+                                                       class = "btn-success"
+                                                     )
+                                                   ),
                                                    shiny::htmlOutput("BFt2"),
                                                    shiny::em("\\(t\\text{-value calculator}\\)"),
 
@@ -536,8 +557,14 @@ ui <-
 
           # Action buttons
           shiny::conditionalPanel("input.Modet2 == 1 || input.Modet2 == 2",
-                           shiny::actionButton("runt2", label = "\\(\\text{Run}\\)")
-
+                                  shiny::tags$div(
+                                    style = "margin-bottom: 12px;",
+                                    shiny::actionButton(
+                                      "runt2",
+                                      label = "\\(\\text{Run}\\)",
+                                      class = "btn-success"
+                                    )
+                                  )
           ),
           shiny::conditionalPanel(
             condition = "input.Modet2 == 1||input.Modet2 == 2",
@@ -799,8 +826,15 @@ shiny::tabPanel("\\(\\text{Correlation}\\)", shiny::withMathJax(),
              ),
 
              shiny::conditionalPanel("input.Moder == 1 | input.Moder == 2",
-                              shiny::actionButton("runr", label = "\\( \\text{Run} \\)")
-             ),
+                                     shiny::tags$div(
+                                       style = "margin-bottom: 12px;",
+                                       shiny::actionButton(
+                                         "runr",
+                                         label = "\\(\\text{Run}\\)",
+                                         class = "btn-success"
+                                       )
+                                     )
+                                     ),
 
              # BF calculator
              shiny::conditionalPanel("input.Moder == 3",
@@ -812,7 +846,14 @@ shiny::tabPanel("\\(\\text{Correlation}\\)", shiny::withMathJax(),
                                        shiny::numericInput("rval", "\\(\\text{Pearson's:} \\)", value = 0)
                                 )
                               ),
-                              shiny::actionButton("calr", label = "\\( \\text{Calculate} \\)"),
+                              shiny::tags$div(
+                                style = "margin-bottom: 12px;",
+                                shiny::actionButton(
+                                  "calr",
+                                  label = "\\(\\text{Calculate}\\)",
+                                  class = "btn-success"
+                                )
+                              ),
                               shiny::htmlOutput("BFrv")
              ),
              shiny::conditionalPanel(
@@ -891,7 +932,7 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
                  ),
                  shiny::column(width = 6,
                         shiny::sliderInput("kf", "\\(k\\text{ predictor - full model :}\\)",
-                                    min = 1, max = 100, value = 1, step = 1, ticks = FALSE)
+                                    min = 2, max = 100, value = 2, step = 1, ticks = FALSE)
                  )
                )
              ),
@@ -968,7 +1009,7 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
                shiny::column(width = 6,
                       shinyWidgets::prettyRadioButtons(
                         inputId = "h0f",
-                        label = shiny::em("$$\\mathcal{H}_0:$$"),
+                        label = shiny::em("\\(\\mathcal{H}_0:\\)"),
                         choices = list(
                           "\\(\\lambda^2 = 0 \\)" = 1,
                           "\\(\\lambda^2 \\in [0, \\epsilon]\\)" = 2
@@ -1017,7 +1058,7 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
              shiny::fluidRow(
                shiny::column(width = 4,
                       shiny::conditionalPanel(condition = "input.modelf == 1",
-                                       shiny::sliderInput("rf", "\\(\\text{r scale:}\\)", min = 0.01, max = 3, value = 1, step = 0.01, ticks = FALSE)
+                                       shiny::sliderInput("rf", "\\(\\text{r scale:}\\)", min = 0.01, max = 1, value = .5, step = 0.01, ticks = FALSE)
                       )
                ),
                shiny::column(width = 4,
@@ -1058,7 +1099,7 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
                  shiny::fluidRow(
                    shiny::column(width = 4,
                                  shiny::conditionalPanel(condition = "input.modelfd == 1",
-                                                         shiny::sliderInput("rfd", "\\(\\text{r scale:}\\)", min = 0.01, max = 3, value = 1, step = 0.01, ticks = FALSE)
+                                                         shiny::sliderInput("rfd", "\\(\\text{r scale:}\\)", min = 0.01, max = 1, value = .5, step = 0.01, ticks = FALSE)
                                  ),
                                  shiny::conditionalPanel(condition = "input.modelfd == 3",
                                                          shiny::sliderInput("lfd", "\\(\\lambda^2:\\)", min = 0.01, max = 0.5, value = 0.1, step = 0.01, ticks = FALSE)
@@ -1111,11 +1152,18 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
                               shiny::sliderInput("threshold_f", "\\( \\text{Bound of compelling evidence:} \\)", min = 1, max = 20, value = 3, ticks = FALSE)
              ),
              shiny::conditionalPanel(condition = "input.Modef == 2",
-                              shiny::numericInput("nf", "\\( \\text{Sample Size } N: \\)", value = 50)
+                                     shiny::numericInput("nf","\\( \\text{Sample Size } N \\; (\u2265 k + 1):\\)",value = 50)
              ),
              shiny::conditionalPanel(condition = "input.Modef == 1|input.Modef == 2",
-                              shiny::actionButton("runf", label = "\\( \\text{Run} \\)")
-             ),
+                                     shiny::tags$div(
+                                       style = "margin-bottom: 12px;",
+                                       shiny::actionButton(
+                                         "runf",
+                                         label = "\\(\\text{Run}\\)",
+                                         class = "btn-success"
+                                       )
+                                     )
+                                     ),
 
              # BF calculator mode
              shiny::conditionalPanel(condition = "input.Modef == 3",
@@ -1124,7 +1172,14 @@ shiny::tabPanel(shiny::em("\\(\\text{Regression}\\)"), shiny::withMathJax(),
                                 shiny::column(width = 4, shiny::numericInput("df2f", label = "\\( \\mathcal{df}_2: \\)", value = 30)),
                                 shiny::column(width = 4, shiny::numericInput("fval", label = "\\( f\\text{-value:} \\)", value = 1))
                               ),
-                              shiny::actionButton("calf", label = "\\( \\text{Calculate} \\)"),
+                              shiny::tags$div(
+                                style = "margin-bottom: 12px;",
+                                shiny::actionButton(
+                                  "calf",
+                                  label = "\\(\\text{Calculate}\\)",
+                                  class = "btn-success"
+                                )
+                              ),
                               shiny::htmlOutput("BFcalf")
              ),
 
@@ -1223,7 +1278,7 @@ shiny::navbarMenu(
                ),
 
                shiny::fluidRow(
-                 shiny::column(4, shiny::sliderInput("h0prop", "\\(p_0\\)", min = .01, max = .99, value = .5, step = .01, ticks = FALSE)),
+                 shiny::column(4, shiny::sliderInput("h0prop", "\\(\\theta_0\\)", min = .01, max = .99, value = .5, step = .01, ticks = FALSE)),
 
                  shiny::column(4,
                                shiny::conditionalPanel("(input.h1bine == 2) && input.h0bin == 2", shiny::em("\\(-\\epsilon = 0\\)")),
@@ -1342,11 +1397,25 @@ shiny::navbarMenu(
                ),
 
                shiny::conditionalPanel("input.Modebin == 1 || input.Modebin == 2",
-                                shiny::actionButton("runbin", label = "\\(\\text{Run}\\)")
-               ),
+                                       shiny::tags$div(
+                                         style = "margin-bottom: 12px;",
+                                         shiny::actionButton(
+                                           "runbin",
+                                           label = "\\(\\text{Run}\\)",
+                                           class = "btn-success"
+                                         )
+                                       )
+                                       ),
 
                shiny::conditionalPanel("input.Modebin == 3",
-                                shiny::actionButton("calbin", label = "\\(\\text{Calculate}\\)"),
+                                       shiny::tags$div(
+                                         style = "margin-bottom: 12px;",
+                                         shiny::actionButton(
+                                           "calbin",
+                                           label = "\\(\\text{Calculate}\\)",
+                                           class = "btn-success"
+                                         )
+                                       ),
                                 shiny::htmlOutput("BFbin")),
                shiny::conditionalPanel(
                  condition = "input.Modebin == 1||input.Modebin == 2",
@@ -1445,8 +1514,8 @@ shiny::sidebarLayout(shiny::sidebarPanel(
              "model_p1",
              label = "\\( \\text{Model for } \\theta_1: \\)",
              choices = list(
-               "\\( \\text{Fixed } p_1 \\)" = 1,
-               "\\( p_1 \\sim \\text{Beta}(\\alpha_{1d}, \\beta_{1d}) \\)" = 2
+               "\\( \\text{Fixed } \\theta_1 \\)" = 1,
+               "\\( \\theta_1 \\sim \\text{Beta}(\\alpha_{1d}, \\beta_{1d}) \\)" = 2
              ),
              selected = 1,
              inline = TRUE
@@ -1455,8 +1524,8 @@ shiny::sidebarLayout(shiny::sidebarPanel(
              "model_p2",
              label = "\\( \\text{Model for } \\theta_2: \\)",
              choices = list(
-               "\\( \\text{Fixed } p_1 \\)" = 1,
-               "\\( p_1 \\sim \\text{Beta}(\\alpha_{2d}, \\beta_{2d}) \\)" = 2
+               "\\( \\text{Fixed } \\theta_2 \\)" = 1,
+               "\\( \\theta_2 \\sim \\text{Beta}(\\alpha_{2d}, \\beta_{2d}) \\)" = 2
              ),
              selected = 1,
              inline = TRUE
@@ -1535,10 +1604,24 @@ shiny::sidebarLayout(shiny::sidebarPanel(
                    )) ,
 
   shiny::conditionalPanel("input.Modep2 == 1 || input.Modep2 == 2",
-                   shiny::actionButton("runp2", label = "\\(\\text{Run}\\)")
-  ),
+                          shiny::tags$div(
+                            style = "margin-bottom: 12px;",
+                            shiny::actionButton(
+                              "runp2",
+                              label = "\\(\\text{Run}\\)",
+                              class = "btn-success"
+                            )
+                          )
+                          ),
   shiny::conditionalPanel("input.Modep2 == 3",
-                   shiny::actionButton("calp2", label = "\\(\\text{Calculate}\\)"),
+                          shiny::tags$div(
+                            style = "margin-bottom: 12px;",
+                            shiny::actionButton(
+                              "calp2",
+                              label = "\\(\\text{Calculate}\\)",
+                              class = "btn-success"
+                            )
+                          ),
                    shiny::htmlOutput("BFp2")
   ),
 
@@ -1592,6 +1675,11 @@ server <- function(input, output, session) {
   server_f(input, output, session)
   server_bin(input, output, session)
   server_p2(input, output, session)
+
+  # This kills the Shiny app service whenever the browser is closed:
+  session$onSessionEnded(function() {
+    shiny::stopApp()
+  })
 
 }
 

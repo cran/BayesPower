@@ -5,70 +5,85 @@
 \title{Bayes Factor for a Bayesian One-Proportion Test}
 \usage{
 BF10.bin.test(
-  x,
   n,
+  x,
+  h0,
+  alternative,
+  ROPE = NULL,
+  prior_analysis,
   alpha,
   beta,
-  h0,
-  scale,
-  prior_analysis,
-  alternative,
-  ROPE = NULL
+  scale
 )
 }
 \arguments{
-\item{x}{Numeric integer. Observed number of successes (non-negative integer scalar, must be \eqn{\le n}).}
-
 \item{n}{Numeric integer. Sample size (positive integer scalar).}
 
-\item{alpha}{Numeric scalar.  Shape parameter of the analysis beta prior under the alternative hypothesis
-(required if \code{prior_analysis = "beta"}).}
-
-\item{beta}{Numeric scalar.  Shape parameter of the analysis beta prior under the alternative hypothesis
-(required if \code{prior_analysis = "beta"}).}
+\item{x}{Numeric integer. Observed number of successes (non-negative integer scalar, must be \eqn{\ge 0} and \eqn{\le n} ).}
 
 \item{h0}{Numeric scalar.  Null proportion value (numeric scalar between 0.1 and 0.9).}
 
-\item{scale}{Numeric scalar.  Scale parameter for the analysis prior (only used if \code{prior_analysis = "Moment"}).}
+\item{alternative}{Character. The direction of the alternative hypothesis : two-sided (\code{"two.sided"} ), right-sided (\code{"greater"}), or left-sided (\code{"less"}).}
 
-\item{prior_analysis}{Character. the analysis prior under the alternative hypothesis:
-\code{"beta"} (stretched beta) or \code{"Moment"} (normal-moment prior).}
+\item{ROPE}{Optional numeric vector or scalar. Specifies the region of practical
+equivalence relative to the point null value of \code{h0}.
+Thus, \code{ROPE} defines the interval of values considered
+practically equivalent to the null value by \code{h0 + ROPE}.
 
-\item{alternative}{Character. Hypothesis being tested: two-sided (\code{"two.sided"}), right-sided (\code{"greater"}),
-or left-sided (\code{"less"}).}
+For \code{alternative = "two.sided"}, argument \code{ROPE} must be a numeric vector of length 2 with two
+distinct finite values such that the first element is negative and the second
+element is positive (i.e., \code{ROPE[1] < 0 < ROPE[2]}). The resulting region of practical equivalence
+is \code{[h0 + ROPE[1], h0 + ROPE[2]]}. Example: If \code{h0 = 0.5}, \code{alternative = "two.sided"}, \code{ROPE = c(-0.2, 0.2)},
+then the region of practical equivalence is \code{[0.3, 0.7]}.
 
-\item{ROPE}{Optional numeric vector. Specifies bounds for an interval
-null hypothesis. For \code{"two.sided"} this must be a numeric vector
-of length 2 with two distinct finite values; for \code{"greater"} a
-numeric scalar > 0; and for \code{"less"} a numeric scalar < 0.}
+For \code{alternative = "greater"}, argument \code{ROPE} must be a numeric scalar > 0,
+the interval null extends from \code{h0} to \code{h0 + ROPE}.
+Example: If \code{h0 = 0.5}, \code{alternative = "greater"}, \code{ROPE = 0.2},
+then the region of practical equivalence is \code{[0.5, 0.7]}.
+
+For \code{alternative = "less"}, argument \code{ROPE} must be a numeric scalar < 0,
+the interval null extends from \code{h0 + ROPE} to \code{h0}.
+Example: If \code{h0 = 0.5}, \code{alternative = "less"}, \code{ROPE = -0.2},
+then the region of practical equivalence is \code{[0.3, 0.5]}.}
+
+\item{prior_analysis}{Character. The analysis prior under the alternative hypothesis:
+\code{"beta"} or \code{"Moment"} (normal-moment prior).}
+
+\item{alpha}{Numeric scalar.  Alpha parameter of the analysis beta prior under the alternative hypothesis
+(required if \code{prior_analysis = "beta"}).}
+
+\item{beta}{Numeric scalar.  Beta parameter of the analysis beta prior under the alternative hypothesis
+(required if \code{prior_analysis = "beta"}).}
+
+\item{scale}{Numeric scalar.  Scale parameter for the analysis prior (required if \code{prior_analysis = "Moment"}).}
 }
 \value{
-An object of class \code{"BFvalue_bin"} containing:
+An object of class \code{BFvalue} containing:
 \itemize{
-\item \code{bf10}: Bayes factor in favor of the alternative hypothesis.
-\item \code{type}: Test type ("One-proportion").
-\item \code{x}: Number of successes.
-\item \code{n}: Sample size.
-\item \code{h0}: Null proportion value.
+\item \code{type}: Character. Test type (always "One-proportion").
+\item \code{bf10}: Numeric scalar. The computed Bayes factor in favor of the alternative hypothesis relative to the null hypothesis.
+\item \code{h0}: Numeric scalar. Null proportion value.
+\item \code{x}: Non-negative integer scalar.  Number of successes.
+\item \code{n}: Positive integer scalar. Sample size.
 \item \code{analysis_h1}: List describing the analysis prior, containing
-\code{prior} (prior distribution), \code{alpha} (alpha parameter),
-\code{beta} (beta parameter), and \code{scale} (scale parameter).
-\item \code{alternative}: the direction of the alternative hypothesis.
-\item \code{ROPE}: interval null bounds (if specified).
-\item \code{p.value}: Numeric, p-value.
+\code{prior} (prior distribution) \code{alpha} (alpha parameter),
+\code{beta} (beta parameter),  \code{location} (location parameter being the same as \code{h0} for the moment-normal prior),
+\item \code{alternative}: Character. The direction of the alternative hypothesis (\code{"two.sided"}, \code{"greater"}, or \code{"less"}).
+\item \code{ROPE}: Optional numeric vector or scalar. Interval bounds under the null, if any.
+\item \code{p.value}: Numeric scalar. p-value.
 }
 }
 \description{
-Calculate the Bayes factor (BF10) for a single-proportion test, either against a point null
+Calculate the Bayes factor (BF10) for a one-proportion test, either against a point null
 or an interval null hypothesis.
 }
 \examples{
 BF10.bin.test(
- x = 42,
  n = 52,
+ x = 42,
  h0 = 0.5,
- prior_analysis = "beta",
  alternative = "greater",
+ prior_analysis = "beta",
  alpha = 1,
  beta = 1)
 
